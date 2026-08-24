@@ -1,0 +1,583 @@
+/**
+ * simplecharts.js
+ * -----------------------------------------------------------------------
+ * Gráficos em SVG puro, gerados no próprio navegador — SEM depender de
+ * nenhuma biblioteca externa ou CDN. Isso existe porque o Chart.js (via
+ * CDN) falhou repetidamente em carregar em alguns navegadores/redes,
+ * deixando os gráficos em branco. Com SVG nativo isso nunca mais acontece:
+ * funciona 100% offline, sem exceção.
+ *
+ * Visual: paleta muda conforme o tema (claro/escuro) para nunca depender
+ * só de roxo nem perder contraste em fundo escuro; a rosca usa gradiente
+ * por segmento e mostra o total no centro, como em dashboards financeiros
+ * de referência.
+ *
+ * API pequena de propósito — cobre só os 3 tipos de gráfico que o app usa:
+ * doughnut, barra (vertical ou horizontal) e linha (uma ou mais séries).
+ */
+
+const SimpleCharts = {
+  // Paleta para fundo claro: reordenada pra nunca ter dois matizes
+  // próximos lado a lado (cada cor consecutiva fica a pelo menos ~90° de
+  // distância no círculo cromático), e recalibrada pra toda cor manter
+  // contraste mínimo legível contra fundo branco.
+  paletteLight: ['#5F3DC4', '#C96A1E', '#2F6FB5', '#D9534F', '#1E8880', '#A15C99', '#A6790E', '#5C6370', '#8B6146', '#1C97AC', '#D6336C', '#1F9E6B'],
+  // Paleta para fundo escuro: mesma sequência de matizes (mesma "família"
+  // do produto), recalibrada com luminância própria pra esse fundo — não
+  // é a de cima só clareada.
+  paletteDark: ['#9B8CF2', '#F2A968', '#6FA8E8', '#F0847F', '#5FD6CC', '#C48FC0', '#E8C468', '#9AA3B2', '#C9A487', '#5FCBDC', '#F284AC', '#4FD1A0'],
+
+  _uid: 0,
+
+  isDark() { return document.documentElement.getAttribute('data-theme') === 'dark'; },
+  palette() { return this.isDark() ? this.paletteDark : this.paletteLight; },
+  colorFor(i) { const p = this.palette(); return p[i % p.length]; },
+
+  _empty(container, msg) {
+    container.innerHTML = `<p class="sc-empty">${msg || 'Sem dados para exibir ainda.'}</p>`;
+  },
+
+  /** Clareia ou escurece uma cor hex por um fator (-1 a 1) — usado para gerar o gradiente de cada fatia. */
+  _shade(hex, amount) {
+    const n = hex.replace('#', '');
+    const num = parseInt(n.length === 3 ? n.split('').map((c) => c + c).join('') : n, 16);
+    let r = (num >> 16) & 0xff, g = (num >> 8) & 0xff, b = num & 0xff;
+    const mix = (c) => amount >= 0 ? Math.round(c + (255 - c) * amount) : Math.round(c * (1 + amount));
+    r = Math.min(255, Math.max(0, mix(r)));
+    g = Math.min(255, Math.max(0, mix(g)));
+    b = Math.min(255, Math.max(0, mix(b)));
+    return `#${[r, g, b].map((c) => c.toString(16).padStart(2, '0')).join('')}`;
+  },
+
+  /** Gráfico de rosca com gradiente por fatia e total no centro. items: [{label, value, color?}] */
+  doughnut(containerId, items, opts = {}) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    const data = (items || []).filter((i) => i.value > 0);
+    const total = data.reduce((s, i) => s + i.value, 0);
+    if (!data.length || total <= 0) return this._empty(container);
+
+    const uid = `sc${this._uid++}`;
+    const size = 176, r = 62, stroke = 26, cx = size / 2, cy = size / 2;
+    const circumference = 2 * Math.PI * r;
+    const gap = data.length > 1 ? 3 : 0; // pequeno respiro entre fatias, visual mais "premium"
+
+    let offset = 0;
+    let defs = '';
+    let segments = '';
+    data.forEach((item, i) => {
+      const color = item.color || this.colorFor(i);
+      const rawLen = (item.value / total) * circumference;
+      const len = Math.max(rawLen - gap, 1);
+      const gradId = `${uid}-g${i}`;
+      defs += `<linearGradient id="${gradId}" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="${this._shade(color, 0.18)}"/>
+        <stop offset="100%" stop-color="${this._shade(color, -0.12)}"/>
+      </linearGradient>`;
+      segments += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="url(#${gradId})" stroke-width="${stroke}" stroke-linecap="round" stroke-dasharray="${len.toFixed(2)} ${(circumference - len).toFixed(2)}" stroke-dashoffset="${(-offset).toFixed(2)}" transform="rotate(-90 ${cx} ${cy})"/>`;
+      offset += rawLen;
+    });
+
+    const centerLabel = opts.centerLabel === false ? null : (opts.centerLabel || 'Total');
+    const centerValue = opts.centerValue === false ? null : (opts.centerValue || formatBRL(total));
+
+    const legend = data.map((item, i) => {
+      const pct = (item.value / total) * 100;
+      if (opts.compactLegend) {
+        return `
+          <div class="sc-legend-item sc-legend-compact">
+            <span class="sc-dot" style="background:${item.color || this.colorFor(i)}"></span>
+            <span class="sc-legend-label">${escapeHtml(item.label)}</span>
+          </div>
+        `;
+      }
+      return `
+        <div class="sc-legend-item">
+          <span class="sc-dot" style="background:${item.color || this.colorFor(i)}"></span>
+          <span class="sc-legend-label">${escapeHtml(item.label)}</span>
+          <span class="sc-legend-pct">${pct.toFixed(0)}%</span>
+          <span class="sc-legend-value">${formatBRL(item.value)}</span>
+        </div>
+      `;
+    }).join('');
+
+    container.innerHTML = `
+      <div class="sc-doughnut-wrap${opts.layout === 'side' ? ' side' : ''}">
+        <div class="sc-doughnut-svg-box">
+          <svg viewBox="0 0 ${size} ${size}" class="sc-doughnut-svg" role="img" aria-label="Gráfico de rosca">
+            <defs>${defs}</defs>
+            ${segments}
+          </svg>
+          <div class="sc-doughnut-center${centerValue == null ? ' no-value' : ''}">
+            ${centerValue != null ? `<span class="sc-doughnut-center-value">${centerValue}</span>` : ''}
+            ${centerLabel != null ? `<span class="sc-doughnut-center-label">${escapeHtml(centerLabel)}</span>` : ''}
+          </div>
+        </div>
+        <div class="sc-legend">${legend}</div>
+      </div>
+    `;
+  },
+
+  /**
+   * Gráfico de barras (uma série). opts: { labels, values, colors?, horizontal? }
+   * `colors` pode ser uma cor única, um array (uma por barra), ou omitido (usa a paleta).
+   */
+  bar(containerId, opts) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    const { labels, values, horizontal } = opts;
+    if (!values || !values.length || values.every((v) => !v)) return this._empty(container);
+
+    const max = Math.max(...values, 0.0001);
+    const colorAt = (i) => Array.isArray(opts.colors) ? opts.colors[i % opts.colors.length] : (opts.colors || this.colorFor(i));
+
+    if (horizontal) {
+      const rows = values.map((v, i) => {
+        const color = colorAt(i);
+        const width = Math.max((v / max) * 100, 2);
+        const gradient = `linear-gradient(90deg, ${this._shade(color, 0.35)}, ${color})`;
+        return `
+        <div class="sc-hbar-row">
+          <span class="sc-hbar-label">${escapeHtml(labels[i])}</span>
+          <div class="sc-hbar-track"><div class="sc-hbar-fill" data-w="${width}" style="width:0%;background:${gradient};transition-delay:${i * 45}ms"></div></div>
+          <span class="sc-hbar-value">${formatBRL(v)}</span>
+        </div>
+      `;
+      }).join('');
+      container.innerHTML = `<div class="sc-hbar-wrap">${rows}</div>`;
+      this._animateFills(container);
+      return;
+    }
+
+    const bars = values.map((v, i) => {
+      const color = colorAt(i);
+      const height = Math.max((v / max) * 100, 2);
+      const gradient = `linear-gradient(180deg, ${this._shade(color, 0.35)}, ${color})`;
+      return `
+      <div class="sc-vbar-col">
+        <span class="sc-vbar-value">${formatBRLShort(v)}</span>
+        <div class="sc-vbar-track"><div class="sc-vbar-fill" data-h="${height}" style="height:0%;background:${gradient};transition-delay:${i * 45}ms"></div></div>
+        <span class="sc-vbar-label">${escapeHtml(labels[i])}</span>
+      </div>
+    `;
+    }).join('');
+    container.innerHTML = `<div class="sc-vbar-wrap">${bars}</div>`;
+    this._animateFills(container);
+  },
+
+  /**
+   * Lista ranqueada (maior pro menor) com barra proporcional — estilo
+   * "Detalhamento de Despesas": um item por linha, nome à esquerda, barra
+   * no meio, valor à direita. Cada barra usa `item.color` se informado
+   * (uma cor por item, ex.: categorias) ou `opts.color`/paleta padrão como
+   * cor única (o destaque vem do tamanho da barra e da ordem). `opts.showPercent`
+   * soma o valor de todos os itens e mostra a % de cada um sobre esse total.
+   * As barras crescem de 0 até o valor final ao renderizar (`_animateFills`).
+   */
+  rankedList(containerId, items, opts = {}) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    if (!items || !items.length) return this._empty(container);
+
+    const max = Math.max(...items.map((i) => i.valor), 0.0001);
+    const total = opts.showPercent ? items.reduce((s, i) => s + (i.valor || 0), 0) : null;
+    const rows = items.map((item, i) => {
+      const color = item.color || opts.color || this.colorFor(0);
+      const pct = total > 0 ? ` <span class="sc-ranked-pct">${((item.valor / total) * 100).toFixed(0)}%</span>` : '';
+      const rank = opts.showRank ? `<span class="sc-ranked-rank">${i + 1}º</span>` : '';
+      const width = Math.max((item.valor / max) * 100, 3);
+      const gradient = `linear-gradient(90deg, ${this._shade(color, 0.35)}, ${color})`;
+      return `
+        <div class="sc-ranked-row${opts.showRank ? ' has-rank' : ''}">
+          ${rank}
+          <span class="sc-ranked-label">${escapeHtml(item.nome)}</span>
+          <div class="sc-ranked-track"><div class="sc-ranked-fill" data-w="${width}" style="width:0%;background:${gradient};transition-delay:${i * 45}ms"></div></div>
+          <span class="sc-ranked-value">${formatBRL(item.valor)}${pct}</span>
+        </div>
+      `;
+    }).join('');
+    container.innerHTML = `<div class="sc-ranked-wrap">${rows}</div>`;
+    this._animateFills(container);
+  },
+
+  /** Deixa as barras de preenchimento (largura em data-w, altura em data-h) crescerem de 0% até o valor final, em cascata. */
+  _animateFills(container) {
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      container.querySelectorAll('[data-w]').forEach((el) => { el.style.width = el.dataset.w + '%'; });
+      container.querySelectorAll('[data-h]').forEach((el) => { el.style.height = el.dataset.h + '%'; });
+    }));
+  },
+
+  /**
+   * Barra de fluxo/alocação: um total dividido em segmentos empilhados
+   * lado a lado (ex.: renda dividida em fixos/parcelas/variáveis/sobra).
+   * opts: { total, segments: [{label, value, color}] }
+   */
+  stackedBar(containerId, opts) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    const { total, segments } = opts;
+    const validSegments = (segments || []).filter((s) => s.value > 0);
+    if (!total || total <= 0 || !validSegments.length) return this._empty(container);
+
+    const bar = validSegments.map((s, i) => `
+      <div class="sc-flow-seg" style="width:${Math.max((s.value / total) * 100, 0.5)}%;background:${s.color || this.colorFor(i)}" title="${escapeHtml(s.label)}: ${formatBRL(s.value)}"></div>
+    `).join('');
+
+    const legend = validSegments.map((s, i) => `
+      <div class="sc-legend-item">
+        <span class="sc-dot" style="background:${s.color || this.colorFor(i)}"></span>
+        <span class="sc-legend-label">${escapeHtml(s.label)}</span>
+        <span class="sc-legend-pct">${((s.value / total) * 100).toFixed(0)}%</span>
+        <span class="sc-legend-value">${formatBRL(s.value)}</span>
+      </div>
+    `).join('');
+
+    container.innerHTML = `
+      <div class="sc-flow-wrap">
+        <div class="sc-flow-bar">${bar}</div>
+        <div class="sc-legend">${legend}</div>
+      </div>
+    `;
+  },
+
+  /**
+   * Grupo de mini-anéis de progresso — um por categoria, mostrando a
+   * participação (%) de cada uma sobre um total de referência. items:
+   * [{label, value, color?}], opts: { total } (se omitido, usa a soma dos items).
+   */
+  miniRingGroup(containerId, items, opts = {}) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    const data = items || [];
+    if (!data.length) return this._empty(container);
+    const total = opts.total || data.reduce((s, i) => s + i.value, 0) || 1;
+
+    const size = 64, r = 26, stroke = 7, cx = size / 2, cy = size / 2;
+    const circumference = 2 * Math.PI * r;
+
+    const rings = data.map((item, i) => {
+      const pct = Math.min((item.value / total) * 100, 100);
+      const color = item.color || this.colorFor(i);
+      const len = (pct / 100) * circumference;
+      return `
+        <div class="sc-ring-item">
+          <svg viewBox="0 0 ${size} ${size}" class="sc-ring-svg" role="img" aria-label="${escapeHtml(item.label)}: ${pct.toFixed(0)}%">
+            <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--surface-soft)" stroke-width="${stroke}"/>
+            <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${color}" stroke-width="${stroke}" stroke-linecap="round" stroke-dasharray="${len.toFixed(2)} ${(circumference - len).toFixed(2)}" transform="rotate(-90 ${cx} ${cy})"/>
+            <text x="${cx}" y="${cy + 4}" text-anchor="middle" class="sc-ring-text">${pct.toFixed(0)}%</text>
+          </svg>
+          <span class="sc-ring-label">${escapeHtml(item.label)}</span>
+        </div>
+      `;
+    }).join('');
+
+    container.innerHTML = `<div class="sc-ring-group">${rings}</div>`;
+  },
+
+  /**
+   * Gráfico de linha (uma ou mais séries). opts: { labels, series: [{name, data, color}] }
+   */
+  line(containerId, opts) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    const { labels, series } = opts;
+    const hasData = series && series.some((s) => s.data.some((v) => v !== 0 && v != null));
+    if (!series || !series.length || !labels.length || !hasData) return this._empty(container);
+
+    const uid = `scl${this._uid++}`;
+    const hasOverlay = opts.pointLabels || (opts.annotations && opts.annotations.length);
+    const w = 320, h = 150, padL = 8, padR = 8, padT = hasOverlay ? 34 : 14, padB = 10;
+    const allValues = series.flatMap((s) => s.data);
+    const max = Math.max(...allValues, 0);
+    const min = Math.min(...allValues, 0);
+    const range = (max - min) || 1;
+    const n = labels.length;
+    const xStep = n > 1 ? (w - padL - padR) / (n - 1) : 0;
+    const yFor = (v) => padT + (h - padT - padB) * (1 - (v - min) / range);
+    const xFor = (i) => padL + i * xStep;
+    const bottomY = h - padB;
+
+    let defs = '';
+    const allPts = [];
+    const layers = series.map((s, si) => {
+      const color = s.color || this.colorFor(si);
+      const pts = s.data.map((v, i) => [xFor(i), yFor(v)]);
+      allPts[si] = pts;
+      const linePath = opts.stepped ? this._stepPath(pts) : opts.monotone ? this._monotonePath(pts) : this._smoothPath(pts);
+      const dots = opts.hideDots ? '' : pts.map(([x, y]) => `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.5" fill="${color}"/>`).join('');
+
+      let areaFill = '';
+      if (series.length === 1 || s.fillArea) {
+        const gradId = `${uid}-area${si}`;
+        const fillOpacity = s.fillOpacity != null ? s.fillOpacity : 0.32;
+        defs += `<linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="${color}" stop-opacity="${fillOpacity}"/>
+          <stop offset="100%" stop-color="${color}" stop-opacity="0"/>
+        </linearGradient>`;
+        const areaPath = `${linePath} L ${pts[pts.length - 1][0].toFixed(1)},${bottomY} L ${pts[0][0].toFixed(1)},${bottomY} Z`;
+        areaFill = `<path d="${areaPath}" fill="url(#${gradId})" stroke="none"/>`;
+      }
+
+      const strokeWidth = s.strokeWidth || 2.5;
+      const dashArray = s.dashed ? ` stroke-dasharray="6 4"` : '';
+      const opacity = s.opacity != null ? ` stroke-opacity="${s.opacity}"` : '';
+      return `${areaFill}<path d="${linePath}" fill="none" stroke="${color}" stroke-width="${strokeWidth}" stroke-linejoin="round" stroke-linecap="round"${dashArray}${opacity}/>${dots}`;
+    }).join('');
+
+    const zeroY = yFor(0).toFixed(1);
+    const zeroLine = min < 0 && max > 0 ? `<line x1="${padL}" y1="${zeroY}" x2="${w - padR}" y2="${zeroY}" stroke="var(--border)" stroke-width="1" stroke-dasharray="3 3"/>` : '';
+
+    const xLabels = labels.map((l, i) => `<span style="left:${((xFor(i) / w) * 100).toFixed(1)}%">${escapeHtml(l)}</span>`).join('');
+
+    const legend = series.length > 1 ? `
+      <div class="sc-legend sc-legend-inline">
+        ${series.map((s, i) => `<div class="sc-legend-item"><span class="sc-dot" style="background:${s.color || this.colorFor(i)}"></span>${escapeHtml(s.name)}</div>`).join('')}
+      </div>
+    ` : '';
+
+    // Rótulos de valor acima de cada ponto e "selos" de anotação em marcos
+    // específicos — posicionados como HTML por cima do SVG (não como <text>
+    // dentro do viewBox, que distorceria com preserveAspectRatio="none").
+    let overlay = '';
+    const labelSeriesIndex = opts.labelSeriesIndex || 0;
+    const labelPts = allPts[labelSeriesIndex];
+    if (labelPts && (opts.pointLabels || (opts.annotations && opts.annotations.length))) {
+      const fmt = opts.labelFormatter || ((v) => String(Math.round(v)));
+      const labelSeries = series[labelSeriesIndex];
+      const pointLabelsHtml = opts.pointLabels ? labelPts.map(([x, y], i) => `
+        <span class="sc-line-point-label" style="left:${((x / w) * 100).toFixed(1)}%;top:${((y / h) * 100).toFixed(1)}%">${escapeHtml(fmt(labelSeries.data[i]))}</span>
+      `).join('') : '';
+      const annotationsHtml = (opts.annotations || []).map((a) => {
+        const pt = labelPts[a.index];
+        if (!pt) return '';
+        const [x, y] = pt;
+        return `<span class="sc-line-annotation" style="left:${((x / w) * 100).toFixed(1)}%;top:${((y / h) * 100).toFixed(1)}%;background:${a.color || 'var(--purple-600)'}">${escapeHtml(a.text)}</span>`;
+      }).join('');
+      overlay = `<div class="sc-line-overlay">${pointLabelsHtml}${annotationsHtml}</div>`;
+    }
+
+    container.innerHTML = `
+      <div class="sc-line-wrap">
+        <div class="sc-line-plot">
+          <svg viewBox="0 0 ${w} ${h}" class="sc-line-svg" preserveAspectRatio="none" role="img" aria-label="Gráfico de linha"><defs>${defs}</defs>${zeroLine}${layers}</svg>
+          ${overlay}
+        </div>
+        <div class="sc-line-xlabels">${xLabels}</div>
+      </div>
+      ${legend}
+    `;
+  },
+
+  /**
+   * Constrói um path "em degraus" (o valor muda de vez no ponto, não numa
+   * transição suave) a partir de pontos [x,y] — usado pra séries que são
+   * uma soma acumulada por dia (ex.: ritmo de gasto), onde uma curva suave
+   * geraria ondulações artificiais nos trechos longos e planos entre um
+   * salto e outro.
+   */
+  _stepPath(points) {
+    if (!points.length) return '';
+    let path = `M ${points[0][0].toFixed(1)},${points[0][1].toFixed(1)}`;
+    for (let i = 1; i < points.length; i++) {
+      const prevY = points[i - 1][1];
+      const [x, y] = points[i];
+      path += ` L ${x.toFixed(1)},${prevY.toFixed(1)} L ${x.toFixed(1)},${y.toFixed(1)}`;
+    }
+    return path;
+  },
+
+  /**
+   * Path suave por interpolação cúbica monótona (Fritsch–Carlson) — pra
+   * séries que só sobem (ou só descem), como uma soma acumulada por dia.
+   * Diferente do Catmull-Rom (_smoothPath), essa curva NUNCA ultrapassa o
+   * valor dos pontos vizinhos: nos trechos longos e planos entre um salto
+   * e outro a tangente vira zero automaticamente, então a curva encosta
+   * suave no salto em vez de balançar (era isso que causava a ondulação
+   * estranha quando usávamos Catmull-Rom nessa mesma série).
+   */
+  _monotonePath(points) {
+    const n = points.length;
+    if (n < 2) {
+      const [x, y] = points[0] || [0, 0];
+      return `M ${x.toFixed(1)},${y.toFixed(1)}`;
+    }
+    if (n === 2) {
+      return `M ${points[0][0].toFixed(1)},${points[0][1].toFixed(1)} L ${points[1][0].toFixed(1)},${points[1][1].toFixed(1)}`;
+    }
+
+    const xs = points.map((p) => p[0]);
+    const ys = points.map((p) => p[1]);
+    const d = [];
+    for (let i = 0; i < n - 1; i++) {
+      const hx = xs[i + 1] - xs[i];
+      d.push(hx !== 0 ? (ys[i + 1] - ys[i]) / hx : 0);
+    }
+
+    const m = new Array(n).fill(0);
+    m[0] = d[0];
+    m[n - 1] = d[n - 2];
+    for (let i = 1; i < n - 1; i++) {
+      if (d[i - 1] === 0 || d[i] === 0 || (d[i - 1] < 0) !== (d[i] < 0)) {
+        m[i] = 0;
+      } else {
+        m[i] = (d[i - 1] + d[i]) / 2;
+      }
+    }
+    for (let i = 0; i < n - 1; i++) {
+      if (d[i] === 0) continue;
+      const a = m[i] / d[i];
+      const b = m[i + 1] / d[i];
+      const s = a * a + b * b;
+      if (s > 9) {
+        const tau = 3 / Math.sqrt(s);
+        m[i] = tau * a * d[i];
+        m[i + 1] = tau * b * d[i];
+      }
+    }
+
+    let path = `M ${xs[0].toFixed(1)},${ys[0].toFixed(1)}`;
+    for (let i = 0; i < n - 1; i++) {
+      const hx = xs[i + 1] - xs[i];
+      const cp1x = xs[i] + hx / 3;
+      const cp1y = ys[i] + (m[i] * hx) / 3;
+      const cp2x = xs[i + 1] - hx / 3;
+      const cp2y = ys[i + 1] - (m[i + 1] * hx) / 3;
+      path += ` C ${cp1x.toFixed(1)},${cp1y.toFixed(1)} ${cp2x.toFixed(1)},${cp2y.toFixed(1)} ${xs[i + 1].toFixed(1)},${ys[i + 1].toFixed(1)}`;
+    }
+    return path;
+  },
+
+  /** Constrói um path suave (curvas de Bézier via Catmull-Rom) a partir de pontos [x,y]. */
+  _smoothPath(points) {
+    if (points.length < 2) {
+      const [x, y] = points[0] || [0, 0];
+      return `M ${x.toFixed(1)},${y.toFixed(1)}`;
+    }
+    if (points.length === 2) {
+      return `M ${points[0][0].toFixed(1)},${points[0][1].toFixed(1)} L ${points[1][0].toFixed(1)},${points[1][1].toFixed(1)}`;
+    }
+    let path = `M ${points[0][0].toFixed(1)},${points[0][1].toFixed(1)}`;
+    for (let i = 0; i < points.length - 1; i++) {
+      const p0 = points[i - 1] || points[i];
+      const p1 = points[i];
+      const p2 = points[i + 1];
+      const p3 = points[i + 2] || p2;
+      const cp1x = p1[0] + (p2[0] - p0[0]) / 6;
+      const cp1y = p1[1] + (p2[1] - p0[1]) / 6;
+      const cp2x = p2[0] - (p3[0] - p1[0]) / 6;
+      const cp2y = p2[1] - (p3[1] - p1[1]) / 6;
+      path += ` C ${cp1x.toFixed(1)},${cp1y.toFixed(1)} ${cp2x.toFixed(1)},${cp2y.toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`;
+    }
+    return path;
+  },
+
+  /**
+   * Mini gráfico de tendência (sparkline) para dentro de cards — uma curva
+   * discreta com área em gradiente, sem eixos nem legenda. `values` é uma
+   * lista simples de números (ex.: histórico mensal de um indicador).
+   */
+  sparkline(containerId, values, color) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    const nums = (values || []).filter((v) => v != null);
+    if (nums.length < 2) { container.innerHTML = ''; return; }
+
+    const uid = `scs${this._uid++}`;
+    const w = 140, h = 44, pad = 4;
+    const max = Math.max(...nums);
+    const min = Math.min(...nums);
+    const flat = max === min; // sem variação real entre os meses — linha centralizada, não fabricamos oscilação
+    const range = flat ? 1 : (max - min);
+    const xStep = (w - pad * 2) / (nums.length - 1);
+    const pts = nums.map((v, i) => [pad + i * xStep, flat ? h / 2 : pad + (h - pad * 2) * (1 - (v - min) / range)]);
+    const c = color || this.colorFor(0);
+    const linePath = this._smoothPath(pts);
+    const areaPath = `${linePath} L ${pts[pts.length - 1][0].toFixed(1)},${h - pad} L ${pts[0][0].toFixed(1)},${h - pad} Z`;
+
+    container.innerHTML = `
+      <svg viewBox="0 0 ${w} ${h}" class="sc-spark-svg" preserveAspectRatio="none" role="img" aria-hidden="true">
+        <defs><linearGradient id="${uid}" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="${c}" stop-opacity="0.35"/>
+          <stop offset="100%" stop-color="${c}" stop-opacity="0"/>
+        </linearGradient></defs>
+        <path d="${areaPath}" fill="url(#${uid})" stroke="none"/>
+        <path d="${linePath}" fill="none" stroke="${c}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+      </svg>
+    `;
+  },
+
+  /**
+   * Medidor semicircular (estilo velocímetro) para destacar um único
+   * percentual — usado no Raio-X financeiro. opts: { pct, limitPct?,
+   * state?: 'normal'|'warning'|'danger', centerValue? }
+   *
+   * Cor do preenchimento por semáforo — verde (margem boa), amarelo
+   * (aproximando do limite) ou vermelho (ultrapassado) — usando as mesmas
+   * variáveis semânticas do resto do app (--success/--warning/--danger),
+   * já calibradas pra serem discretas e combinarem com o fundo roxo escuro
+   * do card, em vez de tons gritantes.
+   */
+  gauge(containerId, opts = {}) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    const pct = Math.max(0, Math.min(opts.pct || 0, 100));
+    const w = 220, h = 130, cx = 110, cy = 118, r = 92, stroke = 18;
+
+    const pointFor = (p, radius) => {
+      const angle = Math.PI * (1 - p / 100); // 180° (esquerda) em p=0 até 0° (direita) em p=100
+      return [cx + radius * Math.cos(angle), cy - radius * Math.sin(angle)];
+    };
+    const [sx, sy] = pointFor(0, r);
+    const [ex, ey] = pointFor(100, r);
+    const trackPath = `M ${sx.toFixed(2)} ${sy.toFixed(2)} A ${r} ${r} 0 0 1 ${ex.toFixed(2)} ${ey.toFixed(2)}`;
+
+    const fillColor = opts.state === 'danger' ? 'var(--danger)'
+      : opts.state === 'warning' ? 'var(--warning)'
+      : 'var(--success)';
+
+    let markerSvg = '';
+    if (opts.limitPct != null) {
+      const innerR = r - stroke / 2 - 5;
+      const outerR = r + stroke / 2 + 5;
+      const [ix, iy] = pointFor(opts.limitPct, innerR);
+      const [ox, oy] = pointFor(opts.limitPct, outerR);
+      markerSvg = `
+        <line x1="${ix.toFixed(2)}" y1="${iy.toFixed(2)}" x2="${ox.toFixed(2)}" y2="${oy.toFixed(2)}" stroke="rgba(44,27,87,0.7)" stroke-width="5" stroke-linecap="round"/>
+        <line x1="${ix.toFixed(2)}" y1="${iy.toFixed(2)}" x2="${ox.toFixed(2)}" y2="${oy.toFixed(2)}" stroke="rgba(255,255,255,0.95)" stroke-width="2.5" stroke-linecap="round"/>
+      `;
+    }
+
+    const fillLen = Math.max(pct, pct > 0 ? 0.6 : 0);
+
+    container.innerHTML = `
+      <div class="sc-gauge-wrap">
+        <svg viewBox="0 0 ${w} ${h}" class="sc-gauge-svg" role="img" aria-label="Medidor de ${Math.round(pct)}%">
+          <path d="${trackPath}" fill="none" stroke="rgba(255,255,255,0.16)" stroke-width="${stroke}" stroke-linecap="round"/>
+          <path d="${trackPath}" fill="none" stroke="${fillColor}" stroke-width="${stroke}" stroke-linecap="round" pathLength="100" stroke-dasharray="${fillLen.toFixed(2)} ${(100 - fillLen).toFixed(2)}" class="sc-gauge-fill sc-gauge-fill-${opts.state || 'normal'}"/>
+          ${markerSvg}
+        </svg>
+        <div class="sc-gauge-center">
+          <span class="sc-gauge-value">${escapeHtml(opts.centerValue != null ? opts.centerValue : `${Math.round(pct)}%`)}</span>
+        </div>
+      </div>
+    `;
+  },
+};
+
+function formatBRLShort(v) {
+  if (v == null) return '';
+  const abs = Math.abs(v);
+  if (abs >= 1000) return `${(v / 1000).toFixed(1).replace('.', ',')}k`;
+  return Math.round(v).toString();
+}
+
+// Cópia local — simplecharts.js não deve depender da ordem de carregamento
+// de outros arquivos (accounts.js também define a mesma função).
+if (typeof escapeHtml === 'undefined') {
+  var escapeHtml = function (str) {
+    const div = document.createElement('div');
+    div.textContent = str == null ? '' : String(str);
+    return div.innerHTML;
+  };
+}
