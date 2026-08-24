@@ -1,0 +1,12 @@
+-- =============================================================================
+-- Permite percentual_comprometido nulo em historico_mensal — 2026-08-24.
+-- Calc.calculateCommittedPercentage devolve null quando não há renda
+-- cadastrada (divisão por renda <= 0 não faz sentido). Antes disso nunca
+-- dava pra reproduzir porque toda conta nova nascia com uma renda de
+-- exemplo pré-cadastrada; agora que contas novas começam zeradas (ver
+-- js/storage.js — buildSeedData), o primeiro snapshot de uma conta sem
+-- renda ainda cadastrada tenta gravar null nessa coluna — e a constraint
+-- NOT NULL rejeitava a escrita (Storage.save falhava silenciosamente,
+-- só com um toast de erro genérico).
+-- =============================================================================
+alter table public.historico_mensal alter column percentual_comprometido drop not null;

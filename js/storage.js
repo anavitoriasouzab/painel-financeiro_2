@@ -122,20 +122,19 @@ function migrate(data) {
 }
 
 /**
- * Dado inicial (seed), construído EXATAMENTE a partir dos dados financeiros
- * fornecidos pelo usuário em agosto/2026. Nenhum valor foi inventado.
- * Campos não informados ficam explicitamente como null.
+ * Dado inicial (seed) de uma conta nova: tudo zerado. Cada pessoa que se
+ * cadastra só passa a ver dados depois de cadastrá-los ela mesma — nenhum
+ * valor de exemplo é inventado nem herdado de outra conta.
  *
  * Este seed só é gravado no Supabase na primeira vez que uma conta faz
  * login e ainda não tem nenhum dado salvo (ver Storage.load()).
  */
 function buildSeedData() {
-  const cartaoId = generateId('cartao'); // referenciado pelos parcelamentos abaixo (mesmo cartão único)
   const seed = {
     schemaVersion: SCHEMA_VERSION,
     meta: {
       criadoEm: new Date().toISOString(),
-      mesReferenciaAtual: '2026-08', // mês sendo controlado no momento do cadastro
+      mesReferenciaAtual: new Date().toISOString().slice(0, 7),
     },
 
     perfil: {
@@ -143,12 +142,11 @@ function buildSeedData() {
       foto: null,
     },
 
-    // Regra de ciclo financeiro: salário recebido dia 30 financia o mês seguinte.
     configuracoes: {
-      diaRecebimentoSalario: 30,
-      cicloFinanceiro: 'salario_dia_30_financia_mes_seguinte',
-      margemSeguranca: null, // não informado pelo usuário
-      metaEconomiaMensal: 100.00,
+      diaRecebimentoSalario: null,
+      cicloFinanceiro: null,
+      margemSeguranca: null,
+      metaEconomiaMensal: null,
 
       // Perfil de investidor (ajustável em Planejamento > Potencial de
       // investimento — cenários), usado para calcular quanto do saldo
@@ -175,105 +173,20 @@ function buildSeedData() {
       ocultarValores: { renda: false, saldo: false },
     },
 
-    rendas: [
-      {
-        id: generateId('renda'),
-        nome: 'Salário profissional',
-        valor: 2480.00,
-        frequencia: 'mensal',
-        diaRecebimento: 30,
-        observacao: null,
-        data: null,
-        mesReferencia: null,
-      },
-    ],
+    rendas: [],
+    cartoes: [],
+    despesasRecorrentes: [],
+    parcelamentos: [],
+    despesasVariaveis: [],
 
-    cartoes: [
-      {
-        id: cartaoId,
-        nome: 'Cartão de crédito principal',
-        limite: null,
-        limiteDisponivel: null,
-        diaFechamento: null,
-        diaVencimento: null,
-        valorFaturaAtual: null,
-      },
-    ],
-
-    // Despesas fixas / recorrentes (valor previsível todo mês)
-    despesasRecorrentes: [
-      { id: generateId('rec'), nome: 'Água', valor: 65.00, frequencia: 'mensal', vencimento: 'dia 01', categoria: 'Contas', tipo: 'fixa', status: 'Pendente', comprovante: null, observacao: null, data: null, formaPagamento: null, inicioMesReferencia: null },
-      { id: generateId('rec'), nome: 'Telefone', valor: 70.00, frequencia: 'mensal', vencimento: 'dia 01', categoria: 'Contas', tipo: 'fixa', status: 'Pendente', comprovante: null, observacao: null, data: null, formaPagamento: null, inicioMesReferencia: null },
-      { id: generateId('rec'), nome: 'Academia', valor: 75.00, frequencia: 'mensal', vencimento: 'dia 01', categoria: 'Saúde', tipo: 'fixa', status: 'Pendente', comprovante: null, observacao: null, data: null, formaPagamento: null, inicioMesReferencia: null },
-      { id: generateId('rec'), nome: 'Spotify', valor: 8.18, frequencia: 'mensal', vencimento: null, categoria: 'Assinaturas', tipo: 'assinatura', status: 'Pendente', comprovante: null, observacao: null, data: null, formaPagamento: null, inicioMesReferencia: null },
-      { id: generateId('rec'), nome: 'Netflix', valor: 20.00, frequencia: 'mensal', vencimento: null, categoria: 'Assinaturas', tipo: 'assinatura', status: 'Pendente', comprovante: null, observacao: null, data: null, formaPagamento: null, inicioMesReferencia: null },
-    ],
-
-    // Parcelamentos no cartão único. Cada compra é registrada individualmente,
-    // mas todas apontam para o mesmo cartaoId para permitir consolidação de fatura.
-    parcelamentos: [
-      {
-        id: generateId('parc'), nome: 'Pr Saúde', cartaoId,
-        valorParcela: 190.00, totalParcelas: null, parcelaAtual: null,
-        parcelasRestantes: 2, dataPrimeiraParcela: null,
-        categoria: 'Saúde', observacao: 'Total de parcelas e data da 1ª parcela não informados.',
-      },
-      {
-        id: generateId('parc'), nome: 'Mounjaro', cartaoId,
-        valorParcela: 111.00, totalParcelas: 2, parcelaAtual: 1,
-        parcelasRestantes: 1, dataPrimeiraParcela: null,
-        categoria: 'Saúde', observacao: 'Data da 1ª parcela não informada.',
-      },
-      {
-        id: generateId('parc'), nome: 'Bigazine', cartaoId,
-        valorParcela: 70.50, totalParcelas: 2, parcelaAtual: 1,
-        parcelasRestantes: 1, dataPrimeiraParcela: null,
-        categoria: 'Compras', observacao: 'Data da 1ª parcela não informada.',
-      },
-      {
-        id: generateId('parc'), nome: 'Bemol', cartaoId,
-        valorParcela: 281.20, totalParcelas: null, parcelaAtual: null,
-        parcelasRestantes: 0, statusDescricao: 'última parcela', dataPrimeiraParcela: null,
-        categoria: 'Compras', observacao: 'Total de parcelas e data da 1ª parcela não informados. Esta é a última parcela.',
-      },
-      {
-        id: generateId('parc'), nome: 'Gran Cursos', cartaoId,
-        valorParcela: 70.00, totalParcelas: null, parcelaAtual: null,
-        parcelasRestantes: 0, statusDescricao: 'última parcela', dataPrimeiraParcela: null,
-        categoria: 'Educação', observacao: 'Total de parcelas e data da 1ª parcela não informados. Esta é a última parcela.',
-      },
-    ],
-
-    // Despesas variáveis / únicas, já registradas em agosto/2026.
-    despesasVariaveis: [
-      { id: generateId('var'), nome: 'Rancho / mercado', valor: 576.58, categoria: 'Mercado/Alimentação', data: null, mesReferencia: '2026-08', formaPagamento: null, status: 'Pago', comprovante: null, observacao: null },
-      { id: generateId('var'), nome: 'Drogasil', valor: 166.20, categoria: 'Saúde/Higiene', data: null, mesReferencia: '2026-08', formaPagamento: null, status: 'Pago', comprovante: null, observacao: null },
-      { id: generateId('var'), nome: 'Udemy (5 cursos)', valor: 133.00, categoria: 'Educação', data: null, mesReferencia: '2026-08', formaPagamento: null, status: 'Pago', comprovante: null, observacao: 'Pagamento único, não parcelado.' },
-      { id: generateId('var'), nome: 'Uber', valor: 50.00, categoria: 'Transporte', data: null, mesReferencia: '2026-08', formaPagamento: null, status: 'Pago', comprovante: null, observacao: 'Valor aproximado, pode variar mensalmente.' },
-      { id: generateId('var'), nome: 'Café', valor: 59.00, categoria: 'Alimentação especial / Dia dos Pais', data: null, mesReferencia: '2026-08', formaPagamento: null, status: 'Pago', comprovante: null, observacao: null },
-      { id: generateId('var'), nome: 'Almoço', valor: 43.00, categoria: 'Alimentação especial / Dia dos Pais', data: null, mesReferencia: '2026-08', formaPagamento: null, status: 'Pago', comprovante: null, observacao: null },
-      { id: generateId('var'), nome: 'Cinema', valor: 90.00, categoria: 'Lazer', data: null, mesReferencia: '2026-08', formaPagamento: null, status: 'Pago', comprovante: null, observacao: null },
-    ],
-
+    // Categorias genéricas pra não deixar o seletor de categoria vazio no
+    // primeiro uso — texto livre, não é "dado financeiro" de ninguém.
     categorias: [
       'Moradia', 'Alimentação', 'Transporte', 'Saúde', 'Educação', 'Tecnologia',
-      'Lazer', 'Assinaturas', 'Compras', 'Academia', 'Viagens', 'Contas',
-      'Mercado/Alimentação', 'Saúde/Higiene', 'Alimentação especial / Dia dos Pais', 'Outros',
+      'Lazer', 'Assinaturas', 'Compras', 'Academia', 'Viagens', 'Contas', 'Outros',
     ],
 
-    metas: [
-      {
-        id: generateId('meta'),
-        nome: 'Hábito de guardar dinheiro',
-        valorDesejado: null, // é uma meta de fluxo mensal, não de valor total
-        valorMensalDesejado: 100.00,
-        valorAtual: null,
-        prazoMeses: null,
-        prioridade: 'alta',
-        observacao: 'Meta de economia mensal mínima. Valor acumulado e prazo não informados.',
-      },
-    ],
-
+    metas: [],
     investimentos: [],
 
     reservaEmergencia: {
@@ -283,31 +196,12 @@ function buildSeedData() {
       valorMensalDestinado: null,
     },
 
-    // Registro do que ainda falta o usuário informar, para a UI conseguir
-    // avisar de forma transparente em vez de fingir que os dados existem.
-    pendencias: [
-      'Total de parcelas de "Pr Saúde", "Bemol" e "Gran Cursos"',
-      'Datas da 1ª parcela de todos os parcelamentos do cartão',
-      'Limite, fechamento, vencimento e valor atual da fatura do cartão',
-      'Margem de segurança financeira',
-      'Valor acumulado e prazo da meta de economia mensal',
-      'Dados de reserva de emergência e de investimentos',
-    ],
-
-    // Divergência encontrada nos dados fornecidos: a tabela de categorias de
-    // agosto soma R$ 352,70 em "Parcelas", mas os itens correspondentes
-    // (Bemol R$ 281,20 + Bigazine R$ 70,50) somam R$ 351,70 — diferença de
-    // R$ 1,00. Registrado aqui em vez de "corrigido" silenciosamente.
-    inconsistenciasDetectadas: [
-      {
-        descricao: 'Categoria "Parcelas" em agosto/2026: tabela informa R$ 352,70, mas Bemol + Bigazine somam R$ 351,70 (diferença de R$ 1,00).',
-        resolvida: false,
-      },
-    ],
+    pendencias: [],
+    inconsistenciasDetectadas: [],
   };
 
   // Snapshot do mês atual, calculado a partir dos próprios dados acima —
-  // é o primeiro registro do histórico financeiro (seção 26 do prompt mestre).
+  // é o primeiro registro do histórico financeiro.
   seed.historicoMensal = [buildSnapshot(seed, seed.meta.mesReferenciaAtual)];
 
   return seed;

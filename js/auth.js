@@ -169,7 +169,9 @@ const AuthPage = {
       return;
     }
     if (data && data.session) {
-      // Confirmação de e-mail desativada no projeto — já entra direto.
+      // Só cai aqui se "Confirm email" estiver desativado no painel do
+      // Supabase (Authentication → Sign In / Providers → Email) — nesse
+      // caso o signUp já devolve sessão e entra direto, sem esperar e-mail.
       window.location.href = 'index.html';
       return;
     }
