@@ -49,6 +49,12 @@ const Backup = {
   handleImport(input) {
     const file = input.files && input.files[0];
     if (!file) return;
+    const MAX_IMPORT_SIZE = 8 * 1024 * 1024; // 8MB — folga generosa acima de um backup real, mas barra um arquivo absurdo
+    if (file.size > MAX_IMPORT_SIZE) {
+      alert('Esse arquivo é grande demais para ser um backup deste app. Exporte um novo backup pela tela de Perfil e tente de novo.');
+      input.value = '';
+      return;
+    }
     const reader = new FileReader();
     reader.onload = async (e) => {
       let parsed;
@@ -60,10 +66,11 @@ const Backup = {
         return;
       }
       if (!parsed.rendas || !parsed.despesasRecorrentes || !parsed.meta) {
-        alert('Esse arquivo não parece ser um backup deste app (faltam campos esperados).');
+        alert('Esse arquivo não parece ser um backup deste app. Exporte um novo backup pela tela de Perfil e tente de novo.');
         input.value = '';
         return;
       }
+      this._sanitizeImportedImages(parsed);
       if (!await confirmDialog('Importar este backup vai SUBSTITUIR todos os dados atuais do app. Deseja continuar?', { title: 'Importar backup', confirmLabel: 'Importar e substituir', danger: true })) {
         input.value = '';
         return;
@@ -75,6 +82,20 @@ const Backup = {
       renderAll();
     };
     reader.readAsText(file);
+  },
+
+  /** Um backup é dado externo (pode ter sido editado à mão ou vir de outra
+      origem) — comprovante/foto só deveriam conter uma imagem em base64
+      (é assim que o app sempre gerou esses campos). Qualquer valor fora
+      desse formato é descartado antes de virar HTML em algum card. */
+  _sanitizeImportedImages(parsed) {
+    const isDataImageUrl = (v) => typeof v === 'string' && /^data:image\/[a-z0-9.+-]+;base64,[A-Za-z0-9+/]+=*$/i.test(v);
+    (parsed.despesasVariaveis || []).forEach((d) => {
+      if (d && d.comprovante != null && !isDataImageUrl(d.comprovante)) d.comprovante = null;
+    });
+    if (parsed.perfil && parsed.perfil.foto != null && !isDataImageUrl(parsed.perfil.foto)) {
+      parsed.perfil.foto = null;
+    }
   },
 
   /** Exclui todos os dados da conta (não a conta em si — o login continua existindo, só fica sem nenhum dado financeiro salvo). Confirmação em duas etapas, igual excluir uma conta de verdade. */

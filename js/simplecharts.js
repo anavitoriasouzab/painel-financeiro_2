@@ -221,7 +221,7 @@ const SimpleCharts = {
     if (!total || total <= 0 || !validSegments.length) return this._empty(container);
 
     const bar = validSegments.map((s, i) => `
-      <div class="sc-flow-seg" style="width:${Math.max((s.value / total) * 100, 0.5)}%;background:${s.color || this.colorFor(i)}" title="${escapeHtml(s.label)}: ${formatBRL(s.value)}"></div>
+      <div class="sc-flow-seg" style="width:${Math.max((s.value / total) * 100, 0.5)}%;background:${s.color || this.colorFor(i)}" title="${escapeAttr(s.label)}: ${formatBRL(s.value)}"></div>
     `).join('');
 
     const legend = validSegments.map((s, i) => `
@@ -262,7 +262,7 @@ const SimpleCharts = {
       const len = (pct / 100) * circumference;
       return `
         <div class="sc-ring-item">
-          <svg viewBox="0 0 ${size} ${size}" class="sc-ring-svg" role="img" aria-label="${escapeHtml(item.label)}: ${pct.toFixed(0)}%">
+          <svg viewBox="0 0 ${size} ${size}" class="sc-ring-svg" role="img" aria-label="${escapeAttr(item.label)}: ${pct.toFixed(0)}%"
             <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--surface-soft)" stroke-width="${stroke}"/>
             <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${color}" stroke-width="${stroke}" stroke-linecap="round" stroke-dasharray="${len.toFixed(2)} ${(circumference - len).toFixed(2)}" transform="rotate(-90 ${cx} ${cy})"/>
             <text x="${cx}" y="${cy + 4}" text-anchor="middle" class="sc-ring-text">${pct.toFixed(0)}%</text>
@@ -286,7 +286,7 @@ const SimpleCharts = {
     if (!series || !series.length || !labels.length || !hasData) return this._empty(container);
 
     const uid = `scl${this._uid++}`;
-    const hasOverlay = opts.pointLabels || (opts.annotations && opts.annotations.length);
+    const hasOverlay = opts.pointLabels || opts.labelLastOnly || (opts.annotations && opts.annotations.length);
     const w = 320, h = 150, padL = 8, padR = 8, padT = hasOverlay ? 34 : 14, padB = 10;
     const allValues = series.flatMap((s) => s.data);
     const max = Math.max(...allValues, 0);
@@ -336,25 +336,54 @@ const SimpleCharts = {
       </div>
     ` : '';
 
-    // Rótulos de valor acima de cada ponto e "selos" de anotação em marcos
-    // específicos — posicionados como HTML por cima do SVG (não como <text>
-    // dentro do viewBox, que distorceria com preserveAspectRatio="none").
+    // Rótulos de valor acima de cada ponto (ou só do último, pra não poluir
+    // um gráfico compacto) e "selos" de anotação em marcos específicos —
+    // posicionados como HTML por cima do SVG (não como <text> dentro do
+    // viewBox, que distorceria com preserveAspectRatio="none"). Perto de
+    // qualquer uma das bordas, centralizar o rótulo no ponto (transform:
+    // translateX(-50%)) faz metade dele vazar pra fora do card — isso
+    // sempre acontecia no rótulo do último ponto (ele é sempre o mais à
+    // direita). Ancora pela esquerda/direita nesses casos, só centraliza
+    // de verdade quando o ponto está numa faixa segura no meio.
+    const hAnchor = (xPct) => {
+      if (xPct > 85) return { pos: `right:${(100 - xPct).toFixed(1)}%;`, tx: '0%' };
+      if (xPct < 15) return { pos: `left:${xPct.toFixed(1)}%;`, tx: '0%' };
+      return { pos: `left:${xPct.toFixed(1)}%;`, tx: '-50%' };
+    };
+
     let overlay = '';
     const labelSeriesIndex = opts.labelSeriesIndex || 0;
     const labelPts = allPts[labelSeriesIndex];
-    if (labelPts && (opts.pointLabels || (opts.annotations && opts.annotations.length))) {
+    if (opts.pointLabels || opts.labelLastOnly || (opts.annotations && opts.annotations.length)) {
       const fmt = opts.labelFormatter || ((v) => String(Math.round(v)));
-      const labelSeries = series[labelSeriesIndex];
-      const pointLabelsHtml = opts.pointLabels ? labelPts.map(([x, y], i) => `
-        <span class="sc-line-point-label" style="left:${((x / w) * 100).toFixed(1)}%;top:${((y / h) * 100).toFixed(1)}%">${escapeHtml(fmt(labelSeries.data[i]))}</span>
-      `).join('') : '';
-      const annotationsHtml = (opts.annotations || []).map((a) => {
+      let labelsHtml = '';
+      if (opts.pointLabels && labelPts) {
+        const labelSeries = series[labelSeriesIndex];
+        labelsHtml = labelPts.map(([x, y], i) => {
+          const { pos, tx } = hAnchor((x / w) * 100);
+          return `<span class="sc-line-point-label" style="${pos}top:${((y / h) * 100).toFixed(1)}%;transform:translate(${tx}, calc(-100% - 8px));">${escapeHtml(fmt(labelSeries.data[i]))}</span>`;
+        }).join('');
+      } else if (opts.labelLastOnly) {
+        labelsHtml = series.map((s, si) => {
+          const pts = allPts[si];
+          const i = pts.length - 1;
+          const [x, y] = pts[i];
+          // Cor da série "clareada" pro texto — algumas cores de linha (ex.: roxo
+          // bem escuro) têm contraste ótimo como traço, mas ficam ilegíveis como
+          // texto pequeno sobre o fundo escuro do card.
+          const color = this._shade(s.color || this.colorFor(si), 0.4);
+          const { pos, tx } = hAnchor((x / w) * 100);
+          return `<span class="sc-line-point-label" style="${pos}top:${((y / h) * 100).toFixed(1)}%;transform:translate(${tx}, calc(-100% - 8px));color:${color}">${escapeHtml(fmt(s.data[i]))}</span>`;
+        }).join('');
+      }
+      const annotationsHtml = labelPts ? (opts.annotations || []).map((a) => {
         const pt = labelPts[a.index];
         if (!pt) return '';
         const [x, y] = pt;
-        return `<span class="sc-line-annotation" style="left:${((x / w) * 100).toFixed(1)}%;top:${((y / h) * 100).toFixed(1)}%;background:${a.color || 'var(--purple-600)'}">${escapeHtml(a.text)}</span>`;
-      }).join('');
-      overlay = `<div class="sc-line-overlay">${pointLabelsHtml}${annotationsHtml}</div>`;
+        const { pos, tx } = hAnchor((x / w) * 100);
+        return `<span class="sc-line-annotation" style="${pos}top:${((y / h) * 100).toFixed(1)}%;transform:translate(${tx}, calc(-100% - 20px));background:${a.color || 'var(--purple-600)'}">${escapeHtml(a.text)}</span>`;
+      }).join('') : '';
+      overlay = `<div class="sc-line-overlay">${labelsHtml}${annotationsHtml}</div>`;
     }
 
     container.innerHTML = `
@@ -477,7 +506,14 @@ const SimpleCharts = {
    * discreta com área em gradiente, sem eixos nem legenda. `values` é uma
    * lista simples de números (ex.: histórico mensal de um indicador).
    */
-  sparkline(containerId, values, color) {
+  /**
+   * `opts.pulse`: acrescenta um ponto com glow pulsante no último valor da
+   * série (pensado pro valor "de agora", quando ele ainda nem foi
+   * arquivado no histórico). `opts.valueLabel`: mostra esse valor num
+   * balão flutuante acima do ponto, senão o pulso fica sem contexto —
+   * respeitam prefers-reduced-motion (regra global de css/style.css).
+   */
+  sparkline(containerId, values, color, opts = {}) {
     const container = document.getElementById(containerId);
     if (!container) return;
     const nums = (values || []).filter((v) => v != null);
@@ -495,15 +531,33 @@ const SimpleCharts = {
     const linePath = this._smoothPath(pts);
     const areaPath = `${linePath} L ${pts[pts.length - 1][0].toFixed(1)},${h - pad} L ${pts[0][0].toFixed(1)},${h - pad} Z`;
 
+    const [lastX, lastY] = pts[pts.length - 1];
+    const pulseSvg = opts.pulse ? `
+      <circle class="sc-spark-pulse-ring" cx="${lastX.toFixed(1)}" cy="${lastY.toFixed(1)}" r="3" stroke="${c}"/>
+      <circle class="sc-spark-pulse-dot" cx="${lastX.toFixed(1)}" cy="${lastY.toFixed(1)}" r="3" fill="${c}"/>
+    ` : '';
+    // O ponto do pulso é sempre o último da série (o "agora") — por
+    // construção, fica sempre perto da borda direita. Ancorar a tooltip
+    // pela direita (em vez de centralizar em cima do ponto) evita que ela
+    // vaze pra fora do card nesse caso, sem precisar calcular exceção pra
+    // "ponto perto da borda".
+    const tooltipHtml = opts.valueLabel ? `
+      <div class="sc-spark-tooltip" style="right:${(100 - (lastX / w) * 100).toFixed(1)}%; top:${((lastY / h) * 100).toFixed(1)}%;">${escapeHtml(opts.valueLabel)}</div>
+    ` : '';
+
     container.innerHTML = `
-      <svg viewBox="0 0 ${w} ${h}" class="sc-spark-svg" preserveAspectRatio="none" role="img" aria-hidden="true">
-        <defs><linearGradient id="${uid}" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="${c}" stop-opacity="0.35"/>
-          <stop offset="100%" stop-color="${c}" stop-opacity="0"/>
-        </linearGradient></defs>
-        <path d="${areaPath}" fill="url(#${uid})" stroke="none"/>
-        <path d="${linePath}" fill="none" stroke="${c}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-      </svg>
+      <div class="sc-spark-wrap">
+        <svg viewBox="0 0 ${w} ${h}" class="sc-spark-svg" preserveAspectRatio="none" role="img" aria-label="${opts.valueLabel ? escapeAttr(opts.valueLabel) : 'Tendência'}">
+          <defs><linearGradient id="${uid}" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="${c}" stop-opacity="0.35"/>
+            <stop offset="100%" stop-color="${c}" stop-opacity="0"/>
+          </linearGradient></defs>
+          <path d="${areaPath}" fill="url(#${uid})" stroke="none"/>
+          <path d="${linePath}" fill="none" stroke="${c}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+          ${pulseSvg}
+        </svg>
+        ${tooltipHtml}
+      </div>
     `;
   },
 
@@ -518,6 +572,15 @@ const SimpleCharts = {
    * já calibradas pra serem discretas e combinarem com o fundo roxo escuro
    * do card, em vez de tons gritantes.
    */
+  /* Cores do preenchimento fixas (não seguem --success/--warning/--danger do
+     tema) — o card do medidor (.raiox-card) é sempre um gradiente roxo vívido
+     ou quase-preto, nunca uma superfície neutra clara, então as versões
+     "claras" desses tokens (pensadas pra texto sobre fundo neutro) ficavam
+     esmaecidas/sem contraste em cima dele. Os valores abaixo já eram usados
+     no glow (filter: drop-shadow) do CSS — só o preenchimento não seguia
+     essa mesma cor no tema claro. */
+  gaugeColors: { normal: '#34D399', warning: '#FBBF24', danger: '#F87171' },
+
   gauge(containerId, opts = {}) {
     const container = document.getElementById(containerId);
     if (!container) return;
@@ -532,9 +595,15 @@ const SimpleCharts = {
     const [ex, ey] = pointFor(100, r);
     const trackPath = `M ${sx.toFixed(2)} ${sy.toFixed(2)} A ${r} ${r} 0 0 1 ${ex.toFixed(2)} ${ey.toFixed(2)}`;
 
-    const fillColor = opts.state === 'danger' ? 'var(--danger)'
-      : opts.state === 'warning' ? 'var(--warning)'
-      : 'var(--success)';
+    const state = opts.state || 'normal';
+    const baseColor = this.gaugeColors[state] || this.gaugeColors.normal;
+    const gradId = `sc-gauge-g${this._uid++}`;
+    const gaugeGradient = `
+      <linearGradient id="${gradId}" x1="0%" y1="0%" x2="100%" y2="0%">
+        <stop offset="0%" stop-color="${this._shade(baseColor, -0.12)}"/>
+        <stop offset="100%" stop-color="${this._shade(baseColor, 0.18)}"/>
+      </linearGradient>`;
+    const fillColor = `url(#${gradId})`;
 
     let markerSvg = '';
     if (opts.limitPct != null) {
@@ -553,8 +622,9 @@ const SimpleCharts = {
     container.innerHTML = `
       <div class="sc-gauge-wrap">
         <svg viewBox="0 0 ${w} ${h}" class="sc-gauge-svg" role="img" aria-label="Medidor de ${Math.round(pct)}%">
+          <defs>${gaugeGradient}</defs>
           <path d="${trackPath}" fill="none" stroke="rgba(255,255,255,0.16)" stroke-width="${stroke}" stroke-linecap="round"/>
-          <path d="${trackPath}" fill="none" stroke="${fillColor}" stroke-width="${stroke}" stroke-linecap="round" pathLength="100" stroke-dasharray="${fillLen.toFixed(2)} ${(100 - fillLen).toFixed(2)}" class="sc-gauge-fill sc-gauge-fill-${opts.state || 'normal'}"/>
+          <path d="${trackPath}" fill="none" stroke="${fillColor}" stroke-width="${stroke}" stroke-linecap="round" pathLength="100" stroke-dasharray="${fillLen.toFixed(2)} ${(100 - fillLen).toFixed(2)}" class="sc-gauge-fill sc-gauge-fill-${state}"/>
           ${markerSvg}
         </svg>
         <div class="sc-gauge-center">
@@ -579,5 +649,10 @@ if (typeof escapeHtml === 'undefined') {
     const div = document.createElement('div');
     div.textContent = str == null ? '' : String(str);
     return div.innerHTML;
+  };
+}
+if (typeof escapeAttr === 'undefined') {
+  var escapeAttr = function (str) {
+    return escapeHtml(str).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   };
 }

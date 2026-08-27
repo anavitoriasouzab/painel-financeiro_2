@@ -35,9 +35,18 @@ function rowToCamel(row) {
   Object.keys(row).forEach((k) => { out[snakeToCamel(k)] = row[k]; });
   return out;
 }
+const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+/** Monta a linha a salvar a partir de um item vindo de appData (que, no
+    caminho de importar backup, é dado externo/não confiável) — bloqueia
+    chaves tipo __proto__/constructor antes da atribuição por colchetes,
+    que senão poderia repor o protótipo de `row` num objeto comum. */
 function itemToSnakeRow(item, userId) {
   const row = { user_id: userId };
-  Object.keys(item).forEach((k) => { row[camelToSnake(k)] = item[k]; });
+  Object.keys(item).forEach((k) => {
+    if (UNSAFE_KEYS.has(k)) return;
+    row[camelToSnake(k)] = item[k];
+  });
   return row;
 }
 
@@ -110,7 +119,10 @@ function migrate(data) {
     data.configuracoes.notificacoes = { ativado: false, canais: [] };
   }
   if (!data.configuracoes.ocultarValores) {
-    data.configuracoes.ocultarValores = { renda: false, saldo: false };
+    data.configuracoes.ocultarValores = { renda: false, saldo: false, reserva: false };
+  }
+  if (data.configuracoes.ocultarValores.reserva == null) {
+    data.configuracoes.ocultarValores.reserva = false;
   }
   if (!data.configuracoes.perfilInvestidor) {
     data.configuracoes.perfilInvestidor = 'equilibrado';
@@ -143,10 +155,7 @@ function buildSeedData() {
     },
 
     configuracoes: {
-      diaRecebimentoSalario: null,
-      cicloFinanceiro: null,
       margemSeguranca: null,
-      metaEconomiaMensal: null,
 
       // Perfil de investidor (ajustável em Planejamento > Potencial de
       // investimento — cenários), usado para calcular quanto do saldo
@@ -170,7 +179,7 @@ function buildSeedData() {
       },
 
       // Preferência de privacidade: ocultar valores sensíveis na tela.
-      ocultarValores: { renda: false, saldo: false },
+      ocultarValores: { renda: false, saldo: false, reserva: false },
     },
 
     rendas: [],
@@ -353,10 +362,7 @@ const Storage = {
       },
       perfil: { nome: p.nome ?? null, foto: p.foto ?? null },
       configuracoes: {
-        diaRecebimentoSalario: p.dia_recebimento_salario ?? null,
-        cicloFinanceiro: p.ciclo_financeiro ?? null,
         margemSeguranca: p.margem_seguranca ?? null,
-        metaEconomiaMensal: p.meta_economia_mensal ?? null,
         perfilInvestidor: p.perfil_investidor || 'equilibrado',
         limiteComprometimento: {
           percentual: p.limite_comprometimento_percentual ?? 80,
@@ -369,6 +375,7 @@ const Storage = {
         ocultarValores: {
           renda: !!p.ocultar_valor_renda,
           saldo: !!p.ocultar_valor_saldo,
+          reserva: !!p.ocultar_valor_reserva,
         },
       },
       reservaEmergencia: r
@@ -396,10 +403,7 @@ const Storage = {
       mes_referencia_atual: data.meta.mesReferenciaAtual,
       nome: data.perfil.nome,
       foto: data.perfil.foto,
-      dia_recebimento_salario: data.configuracoes.diaRecebimentoSalario,
-      ciclo_financeiro: data.configuracoes.cicloFinanceiro,
       margem_seguranca: data.configuracoes.margemSeguranca,
-      meta_economia_mensal: data.configuracoes.metaEconomiaMensal,
       perfil_investidor: data.configuracoes.perfilInvestidor || 'equilibrado',
       limite_comprometimento_percentual: data.configuracoes.limiteComprometimento.percentual,
       limite_comprometimento_modo: data.configuracoes.limiteComprometimento.modo,
@@ -407,6 +411,7 @@ const Storage = {
       notificacoes_canais: data.configuracoes.notificacoes.canais || [],
       ocultar_valor_renda: data.configuracoes.ocultarValores.renda,
       ocultar_valor_saldo: data.configuracoes.ocultarValores.saldo,
+      ocultar_valor_reserva: data.configuracoes.ocultarValores.reserva,
     };
     const reserva = data.reservaEmergencia || {};
     const reservaRow = {

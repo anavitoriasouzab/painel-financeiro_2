@@ -19,6 +19,17 @@
 
 <div class="auth-shell">
 
+  <div class="auth-orbs" aria-hidden="true">
+    <span class="auth-orb-wrap is-leader" style="--x:5%; --y:10%; --s:100px; --c:rgba(124,77,224,.44); --o:.46; --dur:16s; --delay:0s; --dx:70px; --dy:-40px; --dx2:-30px; --dy2:60px;"><span class="auth-orb"></span></span>
+    <span class="auth-orb-wrap" style="--x:28%; --y:6%; --s:120px; --c:rgba(180,158,242,.34); --o:.42; --dur:21s; --delay:-5s; --dx:-50px; --dy:55px; --dx2:60px; --dy2:20px;"><span class="auth-orb"></span></span>
+    <span class="auth-orb-wrap" style="--x:57%; --y:12%; --s:70px; --c:rgba(91,61,168,.32); --o:.34; --dur:19s; --delay:-9s; --dx:45px; --dy:65px; --dx2:-70px; --dy2:-25px;"><span class="auth-orb"></span></span>
+    <span class="auth-orb-wrap" style="--x:88%; --y:18%; --s:140px; --c:rgba(124,77,224,.3); --o:.4; --dur:25s; --delay:-14s; --dx:-60px; --dy:-45px; --dx2:35px; --dy2:70px;"><span class="auth-orb"></span></span>
+    <span class="auth-orb-wrap" style="--x:10%; --y:55%; --s:100px; --c:rgba(180,158,242,.34); --o:.38; --dur:18s; --delay:-3s; --dx:55px; --dy:-60px; --dx2:-40px; --dy2:40px;"><span class="auth-orb"></span></span>
+    <span class="auth-orb-wrap" style="--x:92%; --y:45%; --s:80px; --c:rgba(91,61,168,.32); --o:.34; --dur:23s; --delay:-17s; --dx:-70px; --dy:30px; --dx2:50px; --dy2:-55px;"><span class="auth-orb"></span></span>
+    <span class="auth-orb-wrap" style="--x:20%; --y:85%; --s:150px; --c:rgba(124,77,224,.34); --o:.44; --dur:20s; --delay:-7s; --dx:60px; --dy:50px; --dx2:-55px; --dy2:-60px;"><span class="auth-orb"></span></span>
+    <span class="auth-orb-wrap" style="--x:75%; --y:80%; --s:110px; --c:rgba(180,158,242,.32); --o:.36; --dur:27s; --delay:-19s; --dx:-45px; --dy:-70px; --dx2:65px; --dy2:35px;"><span class="auth-orb"></span></span>
+  </div>
+
   <div class="auth-panel">
     <div class="auth-card">
 
@@ -93,7 +104,7 @@
         Ainda não tem conta? <button type="button" class="auth-link" id="auth-switch-link">Criar conta</button>
       </div>
 
-      <p class="auth-footnote">Seus dados financeiros continuam salvos só neste navegador. O login protege o acesso ao painel e prepara sua conta para sincronização futura.</p>
+      <p class="auth-footnote">Seus dados financeiros ficam salvos na sua conta, protegidos por login — só você tem acesso a eles.</p>
     </div>
   </div>
 
@@ -102,5 +113,6 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="js/supabase-config.js"></script>
 <script src="js/auth.js"></script>
+<script src="js/auth-orbs.js"></script>
 </body>
 </html>

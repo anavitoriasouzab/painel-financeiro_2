@@ -31,7 +31,7 @@ const Planning = {
     const wrap = document.getElementById('month-diff-list');
     if (!wrap) return;
     if (!diff.itens.length) {
-      wrap.innerHTML = '<p class="muted-text">Nenhuma mudança detectada para o próximo mês até agora.</p>';
+      wrap.innerHTML = '<p class="muted-text">Nenhuma mudança detectada para o próximo mês ainda.</p>';
     } else {
       wrap.innerHTML = diff.itens.map((i) => `
         <div class="compare-row"><span>${escapeHtml(i.descricao)}</span><strong style="color:var(--success)">+${formatBRL(i.impacto)}</strong></div>
@@ -73,7 +73,7 @@ const Planning = {
     const mesAtual = appData.meta.mesReferenciaAtual;
     const proximo = addMonths(mesAtual, 1);
     if (!await confirmDialog(
-      `Virar de ${formatMonthKey(mesAtual)} para ${formatMonthKey(proximo)}?\n\nIsso vai:\n- Arquivar o mês atual no histórico\n- Avançar as parcelas dos parcelamentos (as que terminam este mês somem)\n- Reiniciar o status das contas recorrentes para "Pendente"\n\nEssa ação não pode ser desfeita.`,
+      `Confirma a virada de ${formatMonthKey(mesAtual)} para ${formatMonthKey(proximo)}? Essa ação não pode ser desfeita.`,
       { title: 'Virar o mês', confirmLabel: 'Virar o mês', danger: true }
     )) return;
 
@@ -91,7 +91,10 @@ const Planning = {
         const atual = p.parcelaAtual == null ? null : p.parcelaAtual + 1;
         return { ...p, parcelasRestantes: restantes, parcelaAtual: atual, statusDescricao: restantes === 0 ? 'última parcela' : null };
       })
-      .filter((p) => p.parcelasRestantes == null || p.parcelasRestantes >= 0);
+      // `parcelasRestantes` pode chegar como NaN vindo de um backup corrompido/editado
+      // à mão (o formulário já impede isso na origem) — nesse caso mantém o
+      // parcelamento em vez de apagar silenciosamente um dado que não dá pra confirmar.
+      .filter((p) => p.parcelasRestantes == null || Number.isNaN(p.parcelasRestantes) || p.parcelasRestantes >= 0);
 
     // 3) Contas recorrentes voltam a ficar pendentes no novo mês.
     appData.despesasRecorrentes.forEach((d) => { d.status = 'Pendente'; });
@@ -104,6 +107,6 @@ const Planning = {
     Dashboard.render(appData);
     Accounts.render(appData);
     Planning.render(appData);
-    toast(`Bem-vinda a ${formatMonthKey(proximo)}!`);
+    toast(`Boas-vindas a ${formatMonthKey(proximo)}!`);
   },
 };

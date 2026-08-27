@@ -117,7 +117,7 @@ const AuthPage = {
       'For security purposes, you can only request this after 60 seconds.': 'Por segurança, espere um minuto antes de tentar de novo.',
       'Unsupported provider: provider is not enabled': 'Login com Google ainda não está disponível — é preciso ativar o provedor Google no painel do Supabase.',
     };
-    return map[message] || message;
+    return map[message] || 'Não foi possível concluir. Tente novamente em instantes.';
   },
 
   async _handleSubmit(e) {

@@ -16,30 +16,72 @@ body.auth-body {
   overflow: hidden;
   isolation: isolate;
   background:
-    radial-gradient(rgba(255,255,255,0.06) 1px, transparent 1.6px) 0 0 / 26px 26px,
+    radial-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1.6px) 0 0 / 26px 26px,
     radial-gradient(60% 55% at 50% 46%, rgba(124, 77, 224, 0.16), transparent 100%),
     radial-gradient(120% 100% at 18% -8%, #2C2050 0%, #170F2B 42%, #0A0714 100%);
 }
 
-/* Manchas de luz discretas, estáticas — dão profundidade sem animação/piscar. */
-.auth-shell::before,
-.auth-shell::after {
-  content: '';
+/* Partículas suaves à deriva, cada uma com seu próprio tamanho/posição/
+   velocidade (via variável CSS por elemento em login.html) — movimento leve
+   e assíncrono, sem repetir o mesmo ciclo em todas ao mesmo tempo. Só
+   transform+opacity animam (leve pra GPU); nada de blur grande sendo
+   recalculado a cada frame. Pausa sozinho com prefers-reduced-motion
+   (regra global já existe em css/style.css).
+
+   Estrutura em duas camadas por partícula, pra não competir pela mesma
+   propriedade `transform`:
+   - .auth-orb-wrap: posição de repouso (--x/--y) + o deslocamento de
+     interação com o mouse, escrito por js/auth-orbs.js (persegue o cursor
+     na partícula "líder", ou foge dele nas outras).
+   - .auth-orb: só a deriva ambiente (@keyframes), sempre rodando por conta
+     própria dentro do wrap. */
+.auth-orbs {
   position: absolute;
-  border-radius: 50%;
-  filter: blur(80px);
+  inset: 0;
   z-index: -1;
+  overflow: hidden;
   pointer-events: none;
 }
-.auth-shell::before {
-  width: 46vmax; height: 46vmax;
-  top: -18vmax; right: -14vmax;
-  background: radial-gradient(circle, rgba(124, 77, 224, 0.32), transparent 72%);
+
+.auth-orb-wrap {
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  width: var(--s);
+  height: var(--s);
+  will-change: transform;
 }
-.auth-shell::after {
-  width: 40vmax; height: 40vmax;
-  bottom: -18vmax; left: -12vmax;
-  background: radial-gradient(circle, rgba(91, 61, 168, 0.24), transparent 72%);
+
+.auth-orb {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  filter: blur(18px);
+  background: radial-gradient(circle, var(--c), transparent 70%);
+  opacity: var(--o);
+  animation: auth-orb-float var(--dur) ease-in-out infinite;
+  animation-delay: var(--delay);
+  will-change: transform;
+}
+
+/* Caminho com 2 pontos intermediários (em vez de ida-e-volta reto) — lê
+   como deriva/flutuação, não como um "tremido" no lugar. --dx/--dy e
+   --dx2/--dy2 (por elemento, em login.html) definem um percurso próprio
+   pra cada partícula. */
+@keyframes auth-orb-float {
+
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+
+  33% {
+    transform: translate(var(--dx), var(--dy)) scale(1.05);
+  }
+
+  66% {
+    transform: translate(var(--dx2), var(--dy2)) scale(0.97);
+  }
 }
 
 .auth-brand {
@@ -54,18 +96,25 @@ body.auth-body {
   color: var(--purple-900);
   margin-bottom: 26px;
 }
-[data-theme="dark"] .auth-brand { color: var(--purple-text); }
+
+[data-theme="dark"] .auth-brand {
+  color: var(--purple-text);
+}
+
 .auth-brand-mark {
-  width: 34px; height: 34px;
+  width: 34px;
+  height: 34px;
   border-radius: 9px;
-  display: flex; align-items: center; justify-content: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-family: var(--font-display);
   font-weight: 700;
   font-size: 12.5px;
   letter-spacing: 0.02em;
   color: #fff;
   background: linear-gradient(155deg, var(--purple-500), var(--purple-700));
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.16);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16);
 }
 
 /* ------------------------------ Painel de form --------------------------- */
@@ -85,7 +134,7 @@ body.auth-body {
   border: 1px solid rgba(255, 255, 255, 0.55);
   border-radius: var(--radius-lg);
   padding: 36px 32px;
-  box-shadow: 0 24px 55px -18px rgba(10, 7, 20, 0.6), inset 0 1px 0 rgba(255,255,255,0.5);
+  box-shadow: 0 24px 55px -18px rgba(10, 7, 20, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.5);
   backdrop-filter: blur(20px) saturate(120%);
   -webkit-backdrop-filter: blur(20px) saturate(120%);
 }
@@ -93,7 +142,7 @@ body.auth-body {
 [data-theme="dark"] .auth-card {
   background: rgba(20, 17, 32, 0.82);
   border-color: rgba(180, 158, 242, 0.14);
-  box-shadow: 0 20px 45px -18px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255,255,255,0.05);
+  box-shadow: 0 20px 45px -18px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .auth-card h1 {
@@ -102,14 +151,20 @@ body.auth-body {
   margin: 0 0 4px;
   color: var(--purple-900);
 }
-[data-theme="dark"] .auth-card h1 { color: var(--text-primary); }
+
+[data-theme="dark"] .auth-card h1 {
+  color: var(--text-primary);
+}
+
 .auth-card .auth-lede {
   font-size: 13.5px;
   color: var(--text-secondary);
   margin: 0 0 20px;
 }
 
-.auth-toggle { margin-bottom: 20px; }
+.auth-toggle {
+  margin-bottom: 20px;
+}
 
 .auth-google-btn {
   width: 100%;
@@ -128,14 +183,25 @@ body.auth-body {
   cursor: pointer;
   margin-bottom: 18px;
 }
-.auth-google-btn:hover { background: rgba(255, 255, 255, 0.78); }
-.auth-google-btn:disabled { opacity: 0.7; cursor: default; }
+
+.auth-google-btn:hover {
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.auth-google-btn:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
 [data-theme="dark"] .auth-google-btn {
   background: rgba(255, 255, 255, 0.06);
   border-color: rgba(180, 158, 242, 0.25);
   color: var(--text-primary);
 }
-[data-theme="dark"] .auth-google-btn:hover { background: rgba(255, 255, 255, 0.1); }
+
+[data-theme="dark"] .auth-google-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
 
 .auth-divider {
   display: flex;
@@ -145,6 +211,7 @@ body.auth-body {
   font-size: 12px;
   color: var(--text-muted);
 }
+
 .auth-divider::before,
 .auth-divider::after {
   content: '';
@@ -152,12 +219,16 @@ body.auth-body {
   height: 1px;
   background: rgba(124, 77, 224, 0.22);
 }
+
 [data-theme="dark"] .auth-divider::before,
 [data-theme="dark"] .auth-divider::after {
   background: rgba(180, 158, 242, 0.2);
 }
 
-.auth-form .field { margin-bottom: 14px; }
+.auth-form .field {
+  margin-bottom: 14px;
+}
+
 .auth-form .field input[type="text"],
 .auth-form .field input[type="email"],
 .auth-form .field input[type="password"],
@@ -165,11 +236,13 @@ body.auth-body {
   background: rgba(255, 255, 255, 0.5);
   border-color: rgba(124, 77, 224, 0.28);
 }
+
 .auth-form .field input:focus {
   outline: none;
   border-color: var(--purple-500);
   box-shadow: 0 0 0 3px rgba(124, 77, 224, 0.18);
 }
+
 [data-theme="dark"] .auth-form .field input[type="text"],
 [data-theme="dark"] .auth-form .field input[type="email"],
 [data-theme="dark"] .auth-form .field input[type="password"],
@@ -178,28 +251,45 @@ body.auth-body {
   border-color: rgba(180, 158, 242, 0.25);
 }
 
-.auth-input-wrap { position: relative; }
-.auth-input-wrap input { width: 100%; padding-left: 38px !important; }
+.auth-input-wrap {
+  position: relative;
+}
+
+.auth-input-wrap input {
+  width: 100%;
+  padding-left: 38px !important;
+}
+
 .auth-input-icon {
   position: absolute;
-  left: 12px; top: 50%;
+  left: 12px;
+  top: 50%;
   transform: translateY(-50%);
   color: var(--text-muted);
   display: flex;
   pointer-events: none;
 }
-.auth-password-wrap input { padding-right: 40px !important; }
+
+.auth-password-wrap input {
+  padding-right: 40px !important;
+}
+
 .auth-eye-btn {
   position: absolute;
-  right: 4px; top: 50%;
+  right: 4px;
+  top: 50%;
   transform: translateY(-50%);
-  background: none; border: none;
+  background: none;
+  border: none;
   color: var(--text-muted);
   padding: 6px;
   cursor: pointer;
   display: flex;
 }
-.auth-eye-btn:hover { color: var(--purple-text); }
+
+.auth-eye-btn:hover {
+  color: var(--purple-text);
+}
 
 .auth-row-between {
   display: flex;
@@ -208,23 +298,38 @@ body.auth-body {
   font-size: 12.5px;
   margin: -4px 0 16px;
 }
+
 .auth-link {
-  background: none; border: none; padding: 0;
+  background: none;
+  border: none;
+  /* padding + margin negativa aumenta a área de toque (o texto sozinho
+     tinha só ~15px de altura, abaixo do mínimo de 24px do WCAG 2.2 Target
+     Size) sem mudar o espaçamento visual ao redor — mesma técnica já usada
+     no .eye-btn em css/style.css. */
+  padding: 8px 4px;
+  margin: -8px -4px;
   color: var(--purple-text);
   font-weight: 600;
   font-size: inherit;
   cursor: pointer;
   text-decoration: none;
 }
-.auth-link:hover { text-decoration: underline; }
+
+.auth-link:hover {
+  text-decoration: underline;
+}
 
 .auth-submit {
   width: 100%;
-  display: flex; align-items: center; justify-content: center; gap: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   background: linear-gradient(155deg, var(--purple-500), var(--purple-700));
   box-shadow: 0 12px 24px -10px rgba(75, 46, 158, 0.55);
   transition: box-shadow 0.15s ease, transform 0.15s ease;
 }
+
 .auth-submit:hover:not(:disabled) {
   box-shadow: 0 14px 28px -8px rgba(75, 46, 158, 0.65);
   transform: translateY(-1px);
@@ -245,22 +350,49 @@ body.auth-body {
   margin-bottom: 16px;
   display: none;
 }
-.auth-message.show { display: block; }
-.auth-message.error { background: var(--danger-bg); color: var(--danger); }
-.auth-message.success { background: var(--success-bg); color: var(--success); }
+
+.auth-message.show {
+  display: block;
+}
+
+.auth-message.error {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.auth-message.success {
+  background: var(--success-bg);
+  color: var(--success);
+}
 
 .auth-spinner {
-  width: 15px; height: 15px;
+  width: 15px;
+  height: 15px;
   border-radius: 50%;
-  border: 2px solid rgba(255,255,255,0.4);
+  border: 2px solid rgba(255, 255, 255, 0.4);
   border-top-color: #fff;
   animation: auth-spin 0.7s linear infinite;
   display: none;
 }
-.auth-submit.loading .auth-spinner { display: inline-block; }
-.auth-submit.loading .auth-submit-label { opacity: 0.85; }
-.auth-submit:disabled { opacity: 0.75; cursor: default; }
-@keyframes auth-spin { to { transform: rotate(360deg); } }
+
+.auth-submit.loading .auth-spinner {
+  display: inline-block;
+}
+
+.auth-submit.loading .auth-submit-label {
+  opacity: 0.85;
+}
+
+.auth-submit:disabled {
+  opacity: 0.75;
+  cursor: default;
+}
+
+@keyframes auth-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 
 .auth-footnote {
   text-align: center;

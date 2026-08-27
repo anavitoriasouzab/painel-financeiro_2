@@ -35,6 +35,117 @@ async function initApp(session) {
   setupGoalModal();
   setupNotificationsModal();
   setupAccountSection(session);
+  setupToggleGroupAria();
+  setupModalAccessibility();
+}
+
+/**
+ * Torna os modais do app (despesa, parcelamento, cartão, renda, meta,
+ * confirmação, notificações e comprovante ampliado) utilizáveis por teclado
+ * e leitor de tela, sem precisar duplicar essa lógica em cada tela que abre
+ * um modal:
+ * - Esc fecha o modal no topo, pelo mesmo botão de fechar/cancelar que um
+ *   clique de mouse usaria (preserva a limpeza de estado que cada
+ *   closeForm()/confirmDialog() já faz).
+ * - Tab/Shift+Tab prendem o foco dentro do modal ativo (focus trap).
+ * - Ao abrir, o foco vai para o primeiro elemento focável do modal; ao
+ *   fechar, volta pro elemento que tinha o foco antes (geralmente o botão
+ *   que abriu o modal).
+ */
+function setupModalAccessibility() {
+  let lastFocused = null;
+
+  function getFocusable(modal) {
+    return Array.from(modal.querySelectorAll(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    )).filter((el) => !el.disabled && el.offsetParent !== null);
+  }
+
+  // Em telas com mais de um modal ativo ao mesmo tempo (ex.: confirmação de
+  // limite de renda aberta por cima do formulário de despesa), o de cima
+  // visualmente é sempre o último no DOM entre os que estão .active.
+  function getTopActiveModal() {
+    const modals = document.querySelectorAll('.modal-overlay.active');
+    return modals.length ? modals[modals.length - 1] : null;
+  }
+
+  function getDismissButton(modal) {
+    if (modal.id === 'confirm-modal') {
+      const cancelBtn = document.getElementById('confirm-modal-cancel');
+      if (cancelBtn && cancelBtn.offsetParent !== null) return cancelBtn;
+      return document.getElementById('confirm-modal-confirm');
+    }
+    return modal.querySelector('[id$="-close-btn"]');
+  }
+
+  document.querySelectorAll('.modal-overlay').forEach((modal) => {
+    modal.setAttribute('role', modal.getAttribute('role') || 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+  });
+
+  const observer = new MutationObserver((mutations) => {
+    mutations.forEach((m) => {
+      if (m.attributeName !== 'class') return;
+      const modal = m.target;
+      if (modal.classList.contains('active')) {
+        lastFocused = document.activeElement;
+        const focusable = getFocusable(modal);
+        if (focusable.length) focusable[0].focus();
+      } else if (lastFocused && typeof lastFocused.focus === 'function') {
+        lastFocused.focus();
+        lastFocused = null;
+      }
+    });
+  });
+  document.querySelectorAll('.modal-overlay').forEach((modal) => observer.observe(modal, { attributes: true }));
+
+  document.addEventListener('keydown', (e) => {
+    const modal = getTopActiveModal();
+    if (!modal) return;
+
+    if (e.key === 'Escape') {
+      const dismissBtn = getDismissButton(modal);
+      if (dismissBtn) dismissBtn.click();
+      else modal.classList.remove('active');
+      return;
+    }
+
+    if (e.key === 'Tab') {
+      const focusable = getFocusable(modal);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+  });
+}
+
+/**
+ * Os grupos de alternância (.segmented e .tabs — tipo de despesa, perfil de
+ * investidor, abas de Contas etc.) já comunicam o estado selecionado
+ * visualmente (classe .active), mas não para leitor de tela. Em vez de
+ * duplicar essa lógica em cada handler espalhado pelos módulos, um único
+ * listener delegado mantém aria-pressed sincronizado com .active sempre que
+ * alguém clica em um botão desses grupos.
+ */
+function syncToggleGroupAria() {
+  document.querySelectorAll('.segmented button, .tabs button').forEach((btn) => {
+    btn.setAttribute('aria-pressed', btn.classList.contains('active') ? 'true' : 'false');
+  });
+}
+function setupToggleGroupAria() {
+  syncToggleGroupAria();
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('.segmented button, .tabs button')) {
+      setTimeout(syncToggleGroupAria, 0);
+    }
+  });
 }
 
 /** Central de notificações (sino no header) — mesmo conteúdo dos lembretes da sidebar, só que acessível em qualquer tamanho de tela. */
@@ -97,10 +208,7 @@ function setupGoalModal() {
 }
 
 function setupProfileAvatar() {
-  const openProfile = () => {
-    switchView('perfil');
-    document.querySelectorAll('[data-nav-target]').forEach((b) => b.classList.toggle('active', b.getAttribute('data-nav-target') === 'perfil'));
-  };
+  const openProfile = () => navigateTo('perfil');
   const headerBtn = document.getElementById('header-avatar-btn');
   if (headerBtn) headerBtn.addEventListener('click', openProfile);
   const sideBtn = document.getElementById('side-avatar-btn');
@@ -119,8 +227,7 @@ function setupExpenseModal() {
 
   const quickAddBtn = document.querySelector('.nav-item.add-btn');
   if (quickAddBtn) quickAddBtn.addEventListener('click', () => {
-    switchView('contas');
-    document.querySelectorAll('[data-nav-target]').forEach((b) => b.classList.toggle('active', b.getAttribute('data-nav-target') === 'contas'));
+    navigateTo('contas');
     Accounts.openForm('variavel', null);
   });
 
@@ -189,6 +296,12 @@ function switchView(viewId) {
   } catch (err) {
     console.error(`Falha ao renderizar a tela "${viewId}":`, err);
   }
+}
+
+/** Troca de tela pelo menu (switchView) e sincroniza o item ativo do menu — usado por qualquer link/botão fora do próprio menu que precise ir direto pra uma tela (ex.: avatar, "+ Nova despesa", "Ver mais"). */
+function navigateTo(viewId) {
+  switchView(viewId);
+  document.querySelectorAll('[data-nav-target]').forEach((b) => b.classList.toggle('active', b.getAttribute('data-nav-target') === viewId));
 }
 
 function setupThemeToggle() {

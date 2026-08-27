@@ -22,7 +22,7 @@ const Installments = {
     const el = document.getElementById('installments-total');
     if (el) el.textContent = formatBRL(Calc.calculateInstallmentsMonthlyTotal(data));
     const countEl = document.getElementById('installments-count');
-    if (countEl) countEl.textContent = `${data.parcelamentos.length} compra(s) ativa(s) neste cartão`;
+    if (countEl) countEl.textContent = `${data.parcelamentos.length} compra(s) ativa(s) no total`;
   },
 
   /** Lista de cartões cadastrados (nome + fechamento + vencimento), com editar/excluir. */
@@ -38,6 +38,7 @@ const Installments = {
         <div class="account-main">
           <div class="account-name">${escapeHtml(c.nome)}</div>
           <div class="account-meta">${c.diaFechamento != null ? `Fechamento: dia ${c.diaFechamento}` : 'Fechamento não informado'} · ${c.diaVencimento != null ? `Vencimento: dia ${c.diaVencimento}` : 'Vencimento não informado'}</div>
+          ${c.limite != null ? `<div class="account-meta">Limite disponível: ${formatBRL(c.limiteDisponivel != null ? c.limiteDisponivel : c.limite)} / ${formatBRL(c.limite)}</div>` : ''}
         </div>
         <div class="account-actions">
           <button class="mini-btn" data-action="edit" data-id="${c.id}">Editar</button>
@@ -61,6 +62,8 @@ const Installments = {
     document.getElementById('card-nome').value = item ? item.nome : '';
     document.getElementById('card-fechamento').value = item && item.diaFechamento != null ? item.diaFechamento : '';
     document.getElementById('card-vencimento').value = item && item.diaVencimento != null ? item.diaVencimento : '';
+    document.getElementById('card-limite').value = item && item.limite != null ? item.limite : '';
+    document.getElementById('card-fatura-atual').value = item && item.valorFaturaAtual != null ? item.valorFaturaAtual : '';
     document.getElementById('card-modal').classList.add('active');
   },
 
@@ -74,6 +77,8 @@ const Installments = {
     const nome = document.getElementById('card-nome').value.trim();
     const fechamentoRaw = document.getElementById('card-fechamento').value;
     const vencimentoRaw = document.getElementById('card-vencimento').value;
+    const limiteRaw = document.getElementById('card-limite').value;
+    const faturaAtualRaw = document.getElementById('card-fatura-atual').value;
 
     if (!nome) { alert('Dê um nome para o cartão.'); return; }
 
@@ -85,6 +90,13 @@ const Installments = {
       return;
     }
 
+    const limite = limiteRaw === '' ? null : parseFloat(limiteRaw);
+    const valorFaturaAtual = faturaAtualRaw === '' ? null : parseFloat(faturaAtualRaw);
+    if ((limite != null && (Number.isNaN(limite) || limite < 0)) || (valorFaturaAtual != null && (Number.isNaN(valorFaturaAtual) || valorFaturaAtual < 0))) {
+      alert('Informe valores válidos para limite e fatura atual (ou deixe em branco).');
+      return;
+    }
+
     let item = this.editingCardId ? appData.cartoes.find((c) => c.id === this.editingCardId) : null;
     if (!item) {
       item = { id: generateId('cartao'), limite: null, limiteDisponivel: null, valorFaturaAtual: null };
@@ -93,6 +105,9 @@ const Installments = {
     item.nome = nome;
     item.diaFechamento = fechamento;
     item.diaVencimento = vencimento;
+    item.limite = limite;
+    item.valorFaturaAtual = valorFaturaAtual;
+    item.limiteDisponivel = (limite != null && valorFaturaAtual != null) ? Math.max(limite - valorFaturaAtual, 0) : null;
 
     Storage.save(appData);
     this.closeCardForm();
@@ -102,9 +117,9 @@ const Installments = {
 
   /** Exclui um cartão — parcelamentos vinculados a ele ficam sem cartão (igual ao "on delete set null" do banco). */
   async deleteCard(id) {
-    if (!await confirmDialog('Excluir este cartão?', { title: 'Excluir cartão', confirmLabel: 'Excluir', danger: true })) return;
+    if (!await confirmDialog('Excluir este cartão? Essa ação não pode ser desfeita.', { title: 'Excluir cartão', confirmLabel: 'Excluir', danger: true })) return;
     const emUso = appData.parcelamentos.filter((p) => p.cartaoId === id);
-    if (emUso.length && !await confirmDialog(`${emUso.length} parcelamento(s) estão vinculados a este cartão e ficarão sem cartão associado. Continuar?`, { title: 'Cartão em uso', confirmLabel: 'Continuar', danger: true })) return;
+    if (emUso.length && !await confirmDialog(`Este cartão tem ${emUso.length} parcelamento(s) vinculado(s), que ficará(ão) sem cartão associado. Continuar?`, { title: 'Cartão em uso', confirmLabel: 'Continuar', danger: true })) return;
     emUso.forEach((p) => { p.cartaoId = null; });
     appData.cartoes = appData.cartoes.filter((c) => c.id !== id);
     Storage.save(appData);
@@ -122,7 +137,7 @@ const Installments = {
     }
     const margem = Calc.calculateMarginFreedNextMonth(data);
     wrap.innerHTML = `
-      ${margem > 0 ? `<div class="notice-card success" style="margin-bottom:10px;">💰 Margem liberada a partir do próximo mês: <strong>${formatBRL(margem)}</strong></div>` : ''}
+      ${margem > 0 ? `<div class="notice-card success" style="margin-bottom:10px;"><span class="material-symbols-outlined" aria-hidden="true">savings</span> Margem liberada a partir do próximo mês: <strong>${formatBRL(margem)}</strong></div>` : ''}
       <div class="ending-list">
         ${upcoming.map((x) => `
           <div class="ending-row">
@@ -139,7 +154,7 @@ const Installments = {
     if (!list) return;
     list.innerHTML = '';
     if (!data.parcelamentos.length) {
-      list.innerHTML = '<div class="coming-soon"><p>Nenhum parcelamento cadastrado.</p></div>';
+      list.innerHTML = '<div class="coming-soon"><p>Nenhum parcelamento cadastrado ainda.</p></div>';
       return;
     }
     data.parcelamentos.forEach((p) => list.appendChild(this._buildCard(p, data)));
@@ -233,10 +248,11 @@ const Installments = {
     const observacao = document.getElementById('installment-observacao').value.trim() || null;
 
     if (!nome || Number.isNaN(valorParcela) || valorParcela <= 0) {
-      alert('Preencha nome e um valor de parcela válido.');
+      alert('Preencha o nome e um valor de parcela válido.');
       return;
     }
-    if (restantesRaw === '') {
+    const parcelasRestantes = restantesRaw === '' ? NaN : parseInt(restantesRaw, 10);
+    if (restantesRaw === '' || Number.isNaN(parcelasRestantes) || parcelasRestantes < 0) {
       alert('Informe quantas parcelas restam (pode ser 0, se esta for a última).');
       return;
     }
@@ -256,7 +272,7 @@ const Installments = {
     item.valorParcela = valorParcela;
     item.totalParcelas = totalRaw === '' ? null : parseInt(totalRaw, 10);
     item.parcelaAtual = atualRaw === '' ? null : parseInt(atualRaw, 10);
-    item.parcelasRestantes = parseInt(restantesRaw, 10);
+    item.parcelasRestantes = parcelasRestantes;
     item.categoria = categoria;
     item.observacao = observacao;
     item.dataPrimeiraParcela = item.dataPrimeiraParcela || null;

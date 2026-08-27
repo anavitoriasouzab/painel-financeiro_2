@@ -39,7 +39,7 @@ const Charts = {
     const alerts = Calc.generateAlerts(data).filter((a) => !dispensados.includes(a.id));
     wrap.innerHTML = '';
     if (!alerts.length) {
-      wrap.innerHTML = '<p class="muted-text">Nenhum alerta por enquanto.</p>';
+      wrap.innerHTML = '<p class="muted-text">Nenhum alerta ainda.</p>';
     } else {
       alerts.forEach((a) => wrap.appendChild(this._buildAlertItem(a)));
     }
@@ -49,8 +49,8 @@ const Charts = {
     const el = document.createElement('div');
     el.className = `notice-card ${alert.tipo}`;
     el.innerHTML = `
-      <span class="notice-card-text">${alert.icon} ${alert.texto}</span>
-      <button class="notif-action-btn" data-action="dismiss" title="Ocultar" aria-label="Ocultar alerta">✕</button>
+      <span class="notice-card-text"><span class="material-symbols-outlined" aria-hidden="true">${alert.icon}</span> ${alert.texto}</span>
+      <button class="notif-action-btn" data-action="dismiss" title="Ocultar" aria-label="Ocultar alerta"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
     `;
     el.querySelector('[data-action="dismiss"]').addEventListener('click', () => this.dismissAlert(alert.id));
     return el;
@@ -104,9 +104,10 @@ const Charts = {
     });
   },
 
-  /** Rótulo do mês, marcando com "(prev.)" o ponto ainda não fechado (ver Calc.buildHistoricoComProjecao). */
+  /** Rótulo do mês: "(prev.)" pra projeção futura, "(atual)" pro mês em andamento — ver Calc.buildHistoricoComProjecao. */
   _histLabel(h) {
-    return formatMonthKeyShort(h.mes) + (h.previsto ? ' (prev.)' : '');
+    const sufixo = h.previsto ? ' (prev.)' : h.emAndamento ? ' (atual)' : '';
+    return formatMonthKeyShort(h.mes) + sufixo;
   },
 
   /**

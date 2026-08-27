@@ -29,6 +29,13 @@ const Accounts = {
     });
   },
 
+  /** Muda de aba programaticamente (ex.: "Ver mais" das despesas recentes do Dashboard) — clica na própria aba pra reaproveitar toda a lógica já ligada em _renderTabs. */
+  switchToTab(tab) {
+    const wrap = document.getElementById('accounts-tabs');
+    const btn = wrap && wrap.querySelector(`button[data-tab="${tab}"]`);
+    if (btn) btn.click();
+  },
+
   _renderTabs() {
     const wrap = document.getElementById('accounts-tabs');
     if (!wrap || wrap.dataset.bound) return;
@@ -66,10 +73,10 @@ const Accounts = {
     list.innerHTML = '';
 
     if (this.currentTab === 'recorrentes') {
-      if (!data.despesasRecorrentes.length) return this._renderEmpty(list, 'Nenhuma conta recorrente cadastrada.');
+      if (!data.despesasRecorrentes.length) return this._renderEmpty(list, 'Nenhuma despesa recorrente cadastrada ainda.');
       data.despesasRecorrentes.forEach((d) => list.appendChild(this._buildRecorrenteCard(d)));
     } else if (this.currentTab === 'variaveis') {
-      if (!data.despesasVariaveis.length) return this._renderEmpty(list, 'Nenhuma despesa variável cadastrada.');
+      if (!data.despesasVariaveis.length) return this._renderEmpty(list, 'Nenhuma despesa variável cadastrada ainda.');
       data.despesasVariaveis.forEach((d) => list.appendChild(this._buildVariavelCard(d)));
     }
     // A aba "parcelamentos" é renderizada por Installments.render() — ver app.js.
@@ -111,7 +118,6 @@ const Accounts = {
       <div class="account-main">
         <div class="account-name">${escapeHtml(d.nome)}</div>
         <div class="account-meta">${escapeHtml(d.categoria || 'Sem categoria')} · ${formatMesReferencia(d.mesReferencia)}</div>
-        ${d.comprovante ? `<img class="receipt-thumb" src="${d.comprovante}" data-action="view-receipt" alt="Comprovante" />` : ''}
       </div>
       <div class="account-side">
         <div class="account-value">${formatBRL(d.valor)}</div>
@@ -122,10 +128,20 @@ const Accounts = {
         <button class="mini-btn danger" data-action="delete">Excluir</button>
       </div>
     `;
+    if (d.comprovante) {
+      // Atribuído via propriedade IDL (thumb.src = ...), não interpolado no
+      // template — nunca é reinterpretado como HTML, então um valor
+      // malicioso (ex.: vindo de um backup importado sem validação) não
+      // consegue escapar do atributo. Ver Storage/backup.js.
+      const thumb = document.createElement('img');
+      thumb.className = 'receipt-thumb';
+      thumb.alt = 'Comprovante';
+      thumb.src = d.comprovante;
+      thumb.addEventListener('click', () => this.viewReceipt(d.comprovante));
+      el.querySelector('.account-main').appendChild(thumb);
+    }
     el.querySelector('[data-action="edit"]').addEventListener('click', () => this.openForm('variavel', d.id));
     el.querySelector('[data-action="delete"]').addEventListener('click', () => this.deleteItem('variavel', d.id));
-    const thumb = el.querySelector('[data-action="view-receipt"]');
-    if (thumb) thumb.addEventListener('click', () => this.viewReceipt(d.comprovante));
     return el;
   },
 
@@ -227,7 +243,7 @@ const Accounts = {
     const file = input.files && input.files[0];
     if (!file) return;
     if (file.size > 1.5 * 1024 * 1024) {
-      alert('Imagem muito grande para salvar localmente (limite de ~1,5MB). Escolha uma foto menor.');
+      alert('Imagem muito grande (limite de ~1,5MB). Escolha uma foto menor.');
       input.value = '';
       return;
     }
@@ -260,7 +276,7 @@ const Accounts = {
     const formaPagamento = document.getElementById('expense-forma-pagamento').value || null;
 
     if (!nome || Number.isNaN(valor) || valor <= 0) {
-      alert('Preencha nome e um valor válido para a despesa.');
+      alert('Preencha o nome e um valor válido para a despesa.');
       return;
     }
 
@@ -371,7 +387,7 @@ async function confirmCommitmentImpact(deltaValor) {
 
   if (modo === 'bloqueio') {
     return confirmDialog(
-      `🔴 Bloqueado pelo seu limite de ${preview.limite.percentual}% da renda.\n\nEsse gasto levaria seu comprometimento de ${pctAntes} para ${pctDepois}.\n\nVocê ativou o modo "bloqueio" — deseja desbloquear e salvar mesmo assim?`,
+      `⚠️ Bloqueado pelo seu limite de ${preview.limite.percentual}% da renda.\n\nEsse gasto levaria seu comprometimento de ${pctAntes} para ${pctDepois}.\n\nVocê ativou o modo "bloqueio" — deseja desbloquear e salvar mesmo assim?`,
       { showCancel: true, confirmLabel: 'Desbloquear e salvar' }
     );
   }
@@ -402,6 +418,14 @@ function escapeHtml(str) {
   const div = document.createElement('div');
   div.textContent = str == null ? '' : String(str);
   return div.innerHTML;
+}
+
+/** Como escapeHtml(), mas também escapa aspas — necessário para interpolar
+    dentro de um atributo HTML entre aspas (title="...", aria-label="...");
+    escapeHtml() sozinho não cobre esse caso porque textContent→innerHTML
+    nunca precisa escapar aspas num nó de texto comum. */
+function escapeAttr(str) {
+  return escapeHtml(str).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 function toast(msg) {

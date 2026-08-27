@@ -14,6 +14,7 @@ const Profile = {
     this._renderGoalsSummary(data);
     this._renderCommitmentSettings(data);
     this._renderMargemSettings(data);
+    this._renderReservaEmergencia(data);
   },
 
   _renderCommitmentSettings(data) {
@@ -62,6 +63,67 @@ const Profile = {
     toast(margem == null ? 'Margem de segurança desativada.' : 'Margem de segurança salva.');
   },
 
+  /**
+   * Reserva de emergência: valor já guardado, meta e aporte mensal
+   * pretendido — só isso, sem nenhuma lógica nova de cálculo além da
+   * cobertura em meses (valorAtual / gastos do mês atual), mostrada como
+   * referência de quanto tempo essa reserva sustentaria o padrão de vida
+   * de hoje se a renda parasse.
+   */
+  _renderReservaEmergencia(data) {
+    const reserva = data.reservaEmergencia || {};
+    const checkbox = document.getElementById('reserva-possui');
+    const fields = document.getElementById('reserva-fields');
+    if (!checkbox || !fields) return;
+
+    checkbox.checked = !!reserva.possui;
+    fields.style.display = reserva.possui ? 'block' : 'none';
+    document.getElementById('reserva-valor-atual').value = reserva.valorAtual != null ? reserva.valorAtual : '';
+    document.getElementById('reserva-meta-valor').value = reserva.metaValor != null ? reserva.metaValor : '';
+    document.getElementById('reserva-valor-mensal').value = reserva.valorMensalDestinado != null ? reserva.valorMensalDestinado : '';
+
+    const pct = reserva.metaValor ? Math.min((reserva.valorAtual || 0) / reserva.metaValor * 100, 100) : 0;
+    const fill = document.getElementById('reserva-progress-fill');
+    if (fill) fill.style.width = `${pct}%`;
+    const progressLabel = document.getElementById('reserva-progress-label');
+    if (progressLabel) {
+      progressLabel.textContent = reserva.metaValor
+        ? `${formatBRL(reserva.valorAtual || 0)} / ${formatBRL(reserva.metaValor)}`
+        : (reserva.valorAtual ? formatBRL(reserva.valorAtual) : '—');
+    }
+    const mesesLabel = document.getElementById('reserva-meses-label');
+    if (mesesLabel) {
+      const meses = Calc.calculateEmergencyFundMonthsCovered(data);
+      mesesLabel.textContent = meses != null ? `Cobre ~${meses.toFixed(1)} mês(es) de gastos` : '';
+    }
+  },
+
+  toggleReservaFields() {
+    const checked = document.getElementById('reserva-possui').checked;
+    document.getElementById('reserva-fields').style.display = checked ? 'block' : 'none';
+  },
+
+  saveReserva() {
+    const possui = document.getElementById('reserva-possui').checked;
+    const parseOrNull = (id) => {
+      const raw = document.getElementById(id).value;
+      return raw === '' ? null : parseFloat(raw);
+    };
+    const valorAtual = parseOrNull('reserva-valor-atual');
+    const metaValor = parseOrNull('reserva-meta-valor');
+    const valorMensalDestinado = parseOrNull('reserva-valor-mensal');
+    for (const v of [valorAtual, metaValor, valorMensalDestinado]) {
+      if (v != null && (Number.isNaN(v) || v < 0)) {
+        alert('Informe valores válidos (ou deixe em branco).');
+        return;
+      }
+    }
+    appData.reservaEmergencia = { possui, valorAtual, metaValor, valorMensalDestinado };
+    Storage.save(appData);
+    this._renderReservaEmergencia(appData);
+    toast('Reserva de emergência salva.');
+  },
+
   _renderHeaderAvatar(data) {
     this._applyAvatar('header-avatar-img', 'header-avatar-placeholder', data);
     this._applyAvatar('side-avatar-img', 'side-avatar-placeholder', data);
@@ -84,7 +146,7 @@ const Profile = {
     } else {
       img.style.display = 'none';
       placeholder.style.display = 'flex';
-      placeholder.textContent = initials(data.perfil.nome);
+      setAvatarPlaceholderContent(placeholder, data.perfil.nome);
     }
   },
 
@@ -102,7 +164,7 @@ const Profile = {
       } else {
         preview.style.display = 'none';
         placeholder.style.display = 'flex';
-        placeholder.textContent = initials(data.perfil.nome);
+        setAvatarPlaceholderContent(placeholder, data.perfil.nome);
       }
     }
   },
@@ -119,7 +181,7 @@ const Profile = {
         <div class="goal-name">${escapeHtml(m.nome)}</div>
         <div class="goal-detail">
           ${m.valorMensalDesejado != null ? `Meta mensal: ${formatBRL(m.valorMensalDesejado)}` : ''}
-          ${m.valorDesejado != null ? `Objetivo: ${formatBRL(m.valorDesejado)}` : ''}
+          ${m.valorDesejado != null ? `Valor desejado: ${formatBRL(m.valorDesejado)}` : ''}
           ${m.valorAtual != null ? ` · Guardado: ${formatBRL(m.valorAtual)}` : ''}
         </div>
         ${m.observacao ? `<div class="goal-obs">${escapeHtml(m.observacao)}</div>` : ''}
@@ -161,8 +223,22 @@ const Profile = {
 };
 
 function initials(nome) {
-  if (!nome) return '🙂';
+  if (!nome) return null;
   return nome.trim().split(/\s+/).slice(0, 2).map((p) => p[0].toUpperCase()).join('');
+}
+
+/** Ícone de pessoa (Material Symbols) usado quando ainda não há nome
+    cadastrado — substitui o antigo emoji 🙂 como placeholder, seguindo a
+    mesma fonte de ícones (fonts.google.com/icons) usada no resto do app. */
+const AVATAR_FALLBACK_ICON = '<span class="material-symbols-outlined" aria-hidden="true">person</span>';
+
+function setAvatarPlaceholderContent(placeholder, nome) {
+  const iniciais = initials(nome);
+  if (iniciais) {
+    placeholder.textContent = iniciais;
+  } else {
+    placeholder.innerHTML = AVATAR_FALLBACK_ICON;
+  }
 }
 
 function firstName(nome) {
@@ -257,7 +333,7 @@ const Income = {
     const observacao = document.getElementById('income-observacao').value.trim() || null;
 
     if (!nome || Number.isNaN(valor) || valor <= 0) {
-      alert('Preencha nome e um valor válido para a renda.');
+      alert('Preencha o nome e um valor válido para a renda.');
       return;
     }
 
@@ -291,7 +367,7 @@ const Income = {
   },
 
   async deleteItem(id) {
-    if (!await confirmDialog('Excluir esta renda?', { title: 'Excluir renda', confirmLabel: 'Excluir', danger: true })) return;
+    if (!await confirmDialog('Excluir esta renda? Essa ação não pode ser desfeita.', { title: 'Excluir renda', confirmLabel: 'Excluir', danger: true })) return;
     appData.rendas = appData.rendas.filter((r) => r.id !== id);
     Storage.save(appData);
     this.render(appData);

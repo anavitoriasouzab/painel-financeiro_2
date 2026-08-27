@@ -12,7 +12,7 @@
   }
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Inter:wght@400;500;600;700&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,400,1,0&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css" />
 <style>html:not(.authed) .app-shell, html:not(.authed) .bottom-nav { visibility: hidden; }</style>
 </head>
@@ -23,14 +23,14 @@
   <!-- Navegação lateral (desktop) -->
   <nav class="side-nav">
     <div class="side-logo">
-      <span class="side-logo-mark">💜</span>
+      <span class="material-symbols-outlined side-logo-mark" aria-hidden="true">account_balance_wallet</span>
       <span class="side-logo-text">Painel Financeiro</span>
     </div>
 
     <div class="side-profile">
       <button class="side-avatar-wrap" id="side-avatar-btn" title="Ver perfil" aria-label="Abrir tela de perfil">
         <img id="side-avatar-img" alt="Foto de perfil" style="display:none" />
-        <span id="side-avatar-placeholder" class="avatar-placeholder">🙂</span>
+        <span id="side-avatar-placeholder" class="avatar-placeholder"><span class="material-symbols-outlined" aria-hidden="true">person</span></span>
       </button>
       <div class="side-greeting" id="side-greeting-name">Olá! 👋</div>
     </div>
@@ -61,7 +61,7 @@
     <div class="side-section side-section-highlight" id="sidebar-reminders-section" style="display:none;">
       <div class="side-section-title">Lembretes <span class="side-reminder-count" id="sidebar-reminder-count"></span></div>
       <div id="sidebar-reminders-list"></div>
-      <button class="side-see-all" onclick="switchView('analises'); document.querySelectorAll('[data-nav-target]').forEach(function(b){b.classList.toggle('active', b.getAttribute('data-nav-target')==='analises');})">Ver todos →</button>
+      <button class="side-see-all" onclick="navigateTo('analises')">Ver todos →</button>
     </div>
 
     <div class="side-footer">
@@ -89,7 +89,7 @@
         </button>
         <button class="avatar-btn" id="header-avatar-btn" title="Perfil" aria-label="Abrir tela de perfil">
           <img id="header-avatar-img" alt="Foto de perfil" style="display:none" />
-          <span id="header-avatar-placeholder" class="avatar-placeholder">🙂</span>
+          <span id="header-avatar-placeholder" class="avatar-placeholder"><span class="material-symbols-outlined" aria-hidden="true">person</span></span>
         </button>
       </div>
     </header>
@@ -121,15 +121,21 @@
             <div class="value" id="stat-saldo">—</div>
             <div id="delta-saldo"></div>
           </div>
-          <div class="stat-card">
+          <div class="stat-card" id="stat-reserva-card" style="display:none;">
+            <div class="label label-eye-wrap"><span class="label-text">Reserva de emergência</span> <button class="eye-btn" id="toggle-reserva-visibility" onclick="Dashboard.toggleVisibility('reserva')" title="Mostrar/ocultar" aria-label="Mostrar ou ocultar valor da reserva de emergência">
+              <svg class="icon-eye-open" viewBox="0 -960 960 960" width="16" height="16" fill="currentColor"><path d="M607.5-372.5Q660-425 660-500t-52.5-127.5Q555-680 480-680t-127.5 52.5Q300-575 300-500t52.5 127.5Q405-320 480-320t127.5-52.5Zm-204-51Q372-455 372-500t31.5-76.5Q435-608 480-608t76.5 31.5Q588-545 588-500t-31.5 76.5Q525-392 480-392t-76.5-31.5ZM214-281.5Q94-363 40-500q54-137 174-218.5T480-800q146 0 266 81.5T920-500q-54 137-174 218.5T480-200q-146 0-266-81.5ZM480-500Zm207.5 160.5Q782-399 832-500q-50-101-144.5-160.5T480-720q-113 0-207.5 59.5T128-500q50 101 144.5 160.5T480-280q113 0 207.5-59.5Z"/></svg>
+              <svg class="icon-eye-closed" viewBox="0 -960 960 960" width="16" height="16" fill="currentColor" style="display:none;"><path d="m644-428-58-58q9-47-27-88t-93-32l-58-58q17-8 34.5-12t37.5-4q75 0 127.5 52.5T660-500q0 20-4 37.5T644-428Zm128 126-58-56q38-29 67.5-63.5T832-500q-50-101-143.5-160.5T480-720q-29 0-57 4t-55 12l-62-62q41-17 84-25.5t90-8.5q151 0 269 83.5T920-500q-23 59-60.5 109.5T772-302Zm20 246L624-222q-35 11-70.5 16.5T480-200q-151 0-269-83.5T40-500q21-53 53-98.5t73-81.5L56-792l56-56 736 736-56 56ZM222-624q-29 26-53 57t-41 67q50 101 143.5 160.5T480-280q20 0 39-2.5t39-5.5l-36-38q-11 3-21 4.5t-21 1.5q-75 0-127.5-52.5T300-500q0-11 1.5-21t4.5-21l-84-82Zm319 93Zm-151 75Z"/></svg>
+            </button></div>
+            <div class="value" id="stat-reserva">—</div>
+            <div class="sub" id="stat-reserva-sub"></div>
+          </div>
+          <div class="stat-card wide">
             <div class="label">Potencial de investimento <span class="badge purple" id="stat-potencial-perfil-badge" style="display:none;"></span></div>
             <div class="value" id="stat-potencial">—</div>
             <div id="delta-potencial"></div>
-            <div class="sub" id="stat-potencial-sub" onclick="this.classList.toggle('expanded')" title="Toque para ver tudo"></div>
+            <div class="sub" id="stat-potencial-sub" onclick="this.classList.toggle('expanded')" title="Ver detalhes"></div>
           </div>
         </div>
-
-        <button class="primary-btn" style="width:100%;margin-top:16px;" onclick="Accounts.openForm('variavel', null)">+ Nova despesa</button>
 
         <div id="dash-goals-section" style="display:none;">
           <div class="section-title">Minhas metas</div>
@@ -154,6 +160,7 @@
 
         <div class="section-title">Despesas recentes</div>
         <div class="accounts-list" id="dash-recent-expenses"></div>
+        <button class="side-see-all" id="dash-recent-see-more" style="display:none;" onclick="navigateTo('contas'); Accounts.switchToTab('variaveis');">Ver mais →</button>
 
       </section>
 
@@ -279,14 +286,14 @@
         <div class="card">
           <p class="muted-text" style="margin-bottom:10px;">Escolha seu perfil de investidor — o "Potencial de investimento" do Dashboard passa a mostrar o valor deste perfil.</p>
           <div class="segmented" id="investor-profile-toggle" style="margin-bottom:12px;">
-            <button type="button" data-perfil="conservador" onclick="Planning.setInvestorProfile('conservador')">🟢 Conservador</button>
-            <button type="button" data-perfil="equilibrado" onclick="Planning.setInvestorProfile('equilibrado')">🟡 Equilibrado</button>
-            <button type="button" data-perfil="agressivo" onclick="Planning.setInvestorProfile('agressivo')">🔴 Agressivo</button>
+            <button type="button" data-perfil="conservador" onclick="Planning.setInvestorProfile('conservador')"><span class="risk-dot risk-dot-conservador" aria-hidden="true"></span>Conservador</button>
+            <button type="button" data-perfil="equilibrado" onclick="Planning.setInvestorProfile('equilibrado')"><span class="risk-dot risk-dot-equilibrado" aria-hidden="true"></span>Equilibrado</button>
+            <button type="button" data-perfil="agressivo" onclick="Planning.setInvestorProfile('agressivo')"><span class="risk-dot risk-dot-agressivo" aria-hidden="true"></span>Agressivo</button>
           </div>
-          <div class="compare-row" id="scenario-row-conservador"><span>🟢 Conservador</span><strong id="scenario-conservador">—</strong></div>
-          <div class="compare-row" id="scenario-row-equilibrado"><span>🟡 Equilibrado</span><strong id="scenario-equilibrado">—</strong></div>
-          <div class="compare-row" id="scenario-row-agressivo"><span>🔴 Agressivo</span><strong id="scenario-agressivo">—</strong></div>
-          <p class="muted-text" style="margin-top:10px;">Estimativa baseada nos dados cadastrados. Sem margem de segurança configurada, os cenários usam 50% / 75% / 100% do saldo disponível como referência. Isto não é uma recomendação financeira profissional.</p>
+          <div class="compare-row" id="scenario-row-conservador"><span><span class="risk-dot risk-dot-conservador" aria-hidden="true"></span>Conservador</span><strong id="scenario-conservador">—</strong></div>
+          <div class="compare-row" id="scenario-row-equilibrado"><span><span class="risk-dot risk-dot-equilibrado" aria-hidden="true"></span>Equilibrado</span><strong id="scenario-equilibrado">—</strong></div>
+          <div class="compare-row" id="scenario-row-agressivo"><span><span class="risk-dot risk-dot-agressivo" aria-hidden="true"></span>Agressivo</span><strong id="scenario-agressivo">—</strong></div>
+          <p class="muted-text" style="margin-top:10px;">Estimativa baseada nos dados cadastrados. Sem margem de segurança configurada, os cenários usam 50% / 75% / 100% do saldo disponível como referência. Isto é só uma estimativa matemática — não é uma recomendação financeira.</p>
         </div>
 
         <div class="section-title">Minhas metas</div>
@@ -300,7 +307,7 @@
         <div class="card">
           <div class="field-row">
             <div class="field"><label for="sim-valor">Valor mensal (R$)</label><input id="sim-valor" type="number" step="0.01" min="0" placeholder="Ex.: 300" /></div>
-            <div class="field"><label for="sim-taxa">Taxa mensal % (opcional)</label><input id="sim-taxa" type="number" step="0.01" min="0" placeholder="Ex.: 0,8" /></div>
+            <div class="field"><label for="sim-taxa">Taxa mensal % (opcional)</label><input id="sim-taxa" type="number" step="0.01" min="0" placeholder="Ex.: 0.8" /></div>
           </div>
           <div class="field"><label for="sim-periodo">Período do gráfico (meses)</label><input id="sim-periodo" type="number" min="1" step="1" placeholder="12" /></div>
           <button class="secondary-btn" style="width:100%;" onclick="Simulator.run()">Simular</button>
@@ -315,7 +322,7 @@
             <div class="field"><label for="inv-valor-alvo">Valor-alvo (R$)</label><input id="inv-valor-alvo" type="number" step="0.01" min="0" placeholder="Ex.: 7000" /></div>
             <div class="field"><label for="inv-meses">Prazo (meses)</label><input id="inv-meses" type="number" min="1" step="1" placeholder="Ex.: 12" /></div>
           </div>
-          <div class="field"><label for="inv-taxa">Taxa mensal % (opcional)</label><input id="inv-taxa" type="number" step="0.01" min="0" placeholder="Ex.: 0,8" /></div>
+          <div class="field"><label for="inv-taxa">Taxa mensal % (opcional)</label><input id="inv-taxa" type="number" step="0.01" min="0" placeholder="Ex.: 0.8" /></div>
           <button class="secondary-btn" style="width:100%;" onclick="InverseSimulator.run()">Calcular</button>
           <div id="inv-result" style="margin-top:10px;"></div>
         </div>
@@ -325,7 +332,7 @@
           <div class="field"><label for="spend-valor">Valor do gasto (R$)</label><input id="spend-valor" type="number" step="0.01" min="0" placeholder="Ex.: 250" /></div>
           <button class="secondary-btn" style="width:100%;" onclick="SpendCheck.run()">Analisar</button>
           <div id="spend-result" style="margin-top:10px;"></div>
-          <p class="muted-text" style="margin-top:8px;">Análise matemática do orçamento cadastrado — não é uma recomendação financeira.</p>
+          <p class="muted-text" style="margin-top:8px;">Isto é só uma estimativa matemática — não é uma recomendação financeira.</p>
         </div>
 
         <div class="section-title">Virada do mês</div>
@@ -341,7 +348,7 @@
         <div class="card profile-header-card">
           <div class="photo-upload-wrap">
             <img id="profile-photo-preview" class="profile-photo" style="display:none" alt="Foto de perfil" />
-            <div id="profile-photo-placeholder" class="profile-photo avatar-placeholder-lg">🙂</div>
+            <div id="profile-photo-placeholder" class="profile-photo avatar-placeholder-lg"><span class="material-symbols-outlined" aria-hidden="true">person</span></div>
           </div>
           <div class="profile-header-fields">
             <div class="field">
@@ -367,6 +374,24 @@
         <div class="section-title">Minhas metas</div>
         <div class="card" id="profile-goals-summary"></div>
 
+        <div class="section-title">Reserva de emergência</div>
+        <div class="card">
+          <p class="muted-text" style="margin-bottom:12px;">O recomendado é ter de 3 a 6 meses do seu custo de vida guardados, para imprevistos como perda de renda ou uma despesa inesperada.</p>
+          <div class="field-checkbox" style="margin-bottom:12px;">
+            <label><input type="checkbox" id="reserva-possui" onchange="Profile.toggleReservaFields()" /> Já tenho uma reserva de emergência</label>
+          </div>
+          <div id="reserva-fields" style="display:none;">
+            <div class="field-row">
+              <div class="field"><label for="reserva-valor-atual">Valor guardado hoje (R$)</label><input id="reserva-valor-atual" type="number" min="0" step="0.01" placeholder="0.00" /></div>
+              <div class="field"><label for="reserva-meta-valor">Meta (R$)</label><input id="reserva-meta-valor" type="number" min="0" step="0.01" placeholder="0.00" /></div>
+            </div>
+            <div class="field"><label for="reserva-valor-mensal">Quanto pretende guardar por mês (R$)</label><input id="reserva-valor-mensal" type="number" min="0" step="0.01" placeholder="0.00" /></div>
+            <div class="progress-track"><div class="progress-fill" id="reserva-progress-fill" style="width:0%;"></div></div>
+            <div class="goal-progress-meta"><span id="reserva-progress-label">—</span><span id="reserva-meses-label">—</span></div>
+          </div>
+          <button class="primary-btn" style="width:100%;margin-top:12px;" onclick="Profile.saveReserva()">Salvar reserva de emergência</button>
+        </div>
+
         <div class="section-title">Configurações — Limite de renda comprometida</div>
         <div class="card">
           <p class="muted-text" style="margin-bottom:12px;">Defina o quanto da sua renda você quer se comprometer no máximo. O app avisa (ou bloqueia, se você preferir) antes de um novo gasto ultrapassar esse limite.</p>
@@ -387,13 +412,13 @@
         <div class="section-title">Configurações — Margem de segurança</div>
         <div class="card">
           <p class="muted-text" style="margin-bottom:12px;">Valor em R$ que você quer manter de reserva no saldo do mês antes de considerar o restante como potencial de investimento — sem isso, o "Potencial de investimento" mostra o saldo cheio.</p>
-          <div class="field"><label for="settings-margem-seguranca">Margem de segurança (R$)</label><input id="settings-margem-seguranca" type="number" min="0" step="0.01" placeholder="0,00" /></div>
+          <div class="field"><label for="settings-margem-seguranca">Margem de segurança (R$)</label><input id="settings-margem-seguranca" type="number" min="0" step="0.01" placeholder="0.00" /></div>
           <button class="primary-btn" style="width:100%;" onclick="Profile.saveMargemSettings()">Salvar configuração</button>
         </div>
 
         <div class="section-title">Backup e privacidade</div>
         <div class="card">
-          <p class="muted-text" style="margin-bottom:12px;">Seus dados ficam salvos apenas neste navegador (localStorage) — não são enviados a nenhum servidor. Exporte um backup de vez em quando para não depender só disso.</p>
+          <p class="muted-text" style="margin-bottom:12px;">Seus dados ficam salvos na sua conta, protegidos por login — só você tem acesso a eles. Exporte um backup de vez em quando por segurança.</p>
           <button class="secondary-btn" style="width:100%;margin-bottom:8px;" onclick="Backup.exportJSON()">Exportar backup (JSON)</button>
           <button class="secondary-btn" style="width:100%;margin-bottom:8px;" onclick="Backup.exportCSV()">Exportar despesas (CSV)</button>
           <button class="secondary-btn" style="width:100%;margin-bottom:8px;" onclick="Backup.triggerImport()">Importar backup (JSON)</button>
@@ -437,7 +462,7 @@
 </nav>
 
 <!-- Modal: adicionar/editar despesa -->
-<div class="modal-overlay" id="expense-modal">
+<div class="modal-overlay" id="expense-modal" role="dialog" aria-modal="true" aria-labelledby="expense-form-title">
   <div class="modal-sheet">
     <div class="modal-header">
       <h3 id="expense-form-title">Nova despesa</h3>
@@ -462,7 +487,7 @@
       <div class="field-row">
         <div class="field">
           <label for="expense-valor">Valor (R$)</label>
-          <input id="expense-valor" type="number" step="0.01" min="0" placeholder="0,00" required />
+          <input id="expense-valor" type="number" step="0.01" min="0" placeholder="0.00" required />
         </div>
         <div class="field">
           <label for="expense-categoria">Categoria</label>
@@ -521,7 +546,7 @@
 </div>
 
 <!-- Modal: adicionar/editar parcelamento -->
-<div class="modal-overlay" id="installment-modal">
+<div class="modal-overlay" id="installment-modal" role="dialog" aria-modal="true" aria-labelledby="installment-form-title">
   <div class="modal-sheet">
     <div class="modal-header">
       <h3 id="installment-form-title">Novo parcelamento</h3>
@@ -562,7 +587,7 @@
 
       <div class="field">
         <label for="installment-observacao">Observação (opcional)</label>
-        <input id="installment-observacao" type="text" placeholder="Ex.: data da 1ª parcela não informada" />
+        <input id="installment-observacao" type="text" placeholder="Ex.: comprado em 3x sem juros" />
       </div>
 
       <div class="modal-actions">
@@ -574,7 +599,7 @@
 </div>
 
 <!-- Modal: adicionar/editar cartão -->
-<div class="modal-overlay" id="card-modal">
+<div class="modal-overlay" id="card-modal" role="dialog" aria-modal="true" aria-labelledby="card-form-title">
   <div class="modal-sheet">
     <div class="modal-header">
       <h3 id="card-form-title">Novo cartão</h3>
@@ -597,6 +622,17 @@
         </div>
       </div>
 
+      <div class="field-row">
+        <div class="field">
+          <label for="card-limite">Limite do cartão (R$, opcional)</label>
+          <input id="card-limite" type="number" min="0" step="0.01" placeholder="0.00" />
+        </div>
+        <div class="field">
+          <label for="card-fatura-atual">Fatura atual (R$, opcional)</label>
+          <input id="card-fatura-atual" type="number" min="0" step="0.01" placeholder="0.00" />
+        </div>
+      </div>
+
       <div class="modal-actions">
         <button type="button" class="secondary-btn" id="card-cancel-btn">Cancelar</button>
         <button type="submit" class="primary-btn">Salvar</button>
@@ -606,7 +642,7 @@
 </div>
 
 <!-- Modal: adicionar/editar renda -->
-<div class="modal-overlay" id="income-modal">
+<div class="modal-overlay" id="income-modal" role="dialog" aria-modal="true" aria-labelledby="income-form-title">
   <div class="modal-sheet">
     <div class="modal-header">
       <h3 id="income-form-title">Nova renda</h3>
@@ -630,7 +666,7 @@
 
       <div class="field">
         <label for="income-valor">Valor (R$)</label>
-        <input id="income-valor" type="number" step="0.01" min="0" placeholder="0,00" required />
+        <input id="income-valor" type="number" step="0.01" min="0" placeholder="0.00" required />
       </div>
 
       <div class="field" id="field-income-dia">
@@ -657,7 +693,7 @@
 </div>
 
 <!-- Modal: adicionar/editar meta -->
-<div class="modal-overlay" id="goal-modal">
+<div class="modal-overlay" id="goal-modal" role="dialog" aria-modal="true" aria-labelledby="goal-form-title">
   <div class="modal-sheet">
     <div class="modal-header">
       <h3 id="goal-form-title">Nova meta</h3>
@@ -677,11 +713,11 @@
       <div class="field">
         <label for="goal-nome">Nome da meta</label>
         <div class="preset-chips" id="goal-preset-chips">
-          <button type="button" class="chip" data-preset="Guardar dinheiro">💰 Guardar dinheiro</button>
-          <button type="button" class="chip" data-preset="Viajar">✈️ Viajar</button>
-          <button type="button" class="chip" data-preset="Reserva de emergência">🛟 Reserva de emergência</button>
-          <button type="button" class="chip" data-preset="Quitar dívidas">📉 Quitar dívidas</button>
-          <button type="button" class="chip" data-preset="Comprar algo">🛍️ Comprar algo</button>
+          <button type="button" class="chip" data-preset="Guardar dinheiro"><span class="material-symbols-outlined" aria-hidden="true">savings</span> Guardar dinheiro</button>
+          <button type="button" class="chip" data-preset="Viajar"><span class="material-symbols-outlined" aria-hidden="true">flight</span> Viajar</button>
+          <button type="button" class="chip" data-preset="Reserva de emergência"><span class="material-symbols-outlined" aria-hidden="true">shield</span> Reserva de emergência</button>
+          <button type="button" class="chip" data-preset="Quitar dívidas"><span class="material-symbols-outlined" aria-hidden="true">trending_down</span> Quitar dívidas</button>
+          <button type="button" class="chip" data-preset="Comprar algo"><span class="material-symbols-outlined" aria-hidden="true">shopping_bag</span> Comprar algo</button>
         </div>
         <input id="goal-nome" type="text" placeholder="Ex.: Viagem" required />
       </div>
@@ -727,7 +763,7 @@
 <!-- Modal de confirmação genérico do app (substitui confirm()/alert() nativos
      do navegador) — usado pelo aviso de limite de renda comprometida e por
      qualquer ação destrutiva (excluir dados, excluir conta, virar o mês etc). -->
-<div class="modal-overlay" id="confirm-modal">
+<div class="modal-overlay" id="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="confirm-modal-title">
   <div class="modal-sheet">
     <div class="modal-header">
       <h3 id="confirm-modal-title">Atenção</h3>
@@ -741,10 +777,10 @@
 </div>
 
 <!-- Modal: central de notificações (sino no header) — mesmos lembretes da sidebar, só que acessível em qualquer tamanho de tela -->
-<div class="modal-overlay" id="notifications-modal">
+<div class="modal-overlay" id="notifications-modal" role="dialog" aria-modal="true" aria-labelledby="notifications-title">
   <div class="modal-sheet">
     <div class="modal-header">
-      <h3>Notificações</h3>
+      <h3 id="notifications-title">Notificações</h3>
       <button class="icon-btn" id="notif-close-btn" aria-label="Fechar notificações"><svg viewBox="0 -960 960 960" width="16" height="16" fill="currentColor"><path d="m249-207-42-42 231-231-231-231 42-42 231 231 231-231 42 42-231 231 231 231-42 42-231-231-231 231Z"/></svg></button>
     </div>
     <div id="notif-list"></div>
@@ -752,14 +788,14 @@
 </div>
 
 <!-- Overlay: visualizar comprovante ampliado -->
-<div class="modal-overlay" id="receipt-overlay">
+<div class="modal-overlay" id="receipt-overlay" role="dialog" aria-modal="true" aria-label="Comprovante ampliado">
   <div class="modal-sheet receipt-sheet">
     <button class="icon-btn" id="receipt-close-btn" aria-label="Fechar visualização do comprovante"><svg viewBox="0 -960 960 960" width="16" height="16" fill="currentColor"><path d="m249-207-42-42 231-231-231-231 42-42 231 231 231-231 42 42-231 231 231 231-42 42-231-231-231 231Z"/></svg></button>
     <img id="receipt-overlay-img" alt="Comprovante ampliado" />
   </div>
 </div>
 
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="js/supabase-config.js"></script>

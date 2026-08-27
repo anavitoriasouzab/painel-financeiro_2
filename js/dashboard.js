@@ -10,7 +10,43 @@ const DASH_ICON_DOWN = '<svg viewBox="0 -960 960 960" width="11" height="11" fil
 const DASH_ICON_NEUTRAL = '<svg viewBox="0 -960 960 960" width="11" height="11" fill="currentColor"><path d="M200-450v-60h560v60H200Z"/></svg>';
 
 /** Rótulos do perfil de investidor — mesmos textos usados no seletor de Planejamento (js/planning.js). */
-const INVESTOR_PROFILE_LABELS = { conservador: '🟢 Conservador', equilibrado: '🟡 Equilibrado', agressivo: '🔴 Agressivo' };
+const INVESTOR_PROFILE_LABELS = { conservador: 'Conservador', equilibrado: 'Equilibrado', agressivo: 'Agressivo' };
+
+/** Ícone (Material Symbols) por categoria — cobre as categorias padrão já
+    semeadas em Storage; categoria livre/desconhecida cai no ícone genérico. */
+const CATEGORY_ICONS = {
+  'Moradia': 'home',
+  'Alimentação': 'restaurant',
+  'Transporte': 'directions_car',
+  'Saúde': 'medical_services',
+  'Educação': 'school',
+  'Tecnologia': 'devices',
+  'Lazer': 'sports_esports',
+  'Assinaturas': 'subscriptions',
+  'Compras': 'shopping_bag',
+  'Academia': 'fitness_center',
+  'Viagens': 'flight',
+  'Contas': 'receipt_long',
+  'Outros': 'category',
+};
+function iconForCategory(categoria) {
+  return CATEGORY_ICONS[categoria] || 'category';
+}
+
+/** Cor do ícone de categoria — mesma paleta (clara/escura) já usada pelos
+    gráficos, indexada pela posição da categoria na lista cadastrada, pra
+    ficar estável entre renderizações. */
+function colorForCategory(data, categoria) {
+  const idx = (data.categorias || []).indexOf(categoria);
+  return SimpleCharts.colorFor(idx >= 0 ? idx : 0);
+}
+
+function hexToRgba(hex, alpha) {
+  const n = hex.replace('#', '');
+  const num = parseInt(n.length === 3 ? n.split('').map((c) => c + c).join('') : n, 16);
+  const r = (num >> 16) & 0xff, g = (num >> 8) & 0xff, b = num & 0xff;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
 
 const Dashboard = {
   render(data) {
@@ -24,7 +60,8 @@ const Dashboard = {
 
     this._renderHeader(mes);
     this._renderStats(data, { renda, gastos, saldo, potencial });
-    this._renderRaioX(data, { percentComprometido, renda, gastos });
+    this._renderReservaCard(data);
+    this._renderRaioX(data, { percentComprometido, renda, gastos, saldo });
     this._renderCharts(data, { renda, gastos, saldo });
     this._renderRecentExpenses(data);
     this._renderGoalsSummary(data);
@@ -42,7 +79,7 @@ const Dashboard = {
       goalsList.innerHTML = destacadas.map((m) => {
         const prog = Calc.calculateGoalProgress(m);
         const detalhe = prog ? `${formatPercent(prog.percent)}` : formatBRL(m.valorMensalDesejado) + '/mês';
-        return `<div class="dash-mini-chip">🎯 <span style="flex:1;">${escapeHtml(m.nome)}</span><strong>${detalhe}</strong></div>`;
+        return `<div class="dash-mini-chip"><span class="material-symbols-outlined" aria-hidden="true">track_changes</span> <span style="flex:1;">${escapeHtml(m.nome)}</span><strong>${detalhe}</strong></div>`;
       }).join('');
     } else {
       goalsSection.style.display = 'none';
@@ -76,7 +113,7 @@ const Dashboard = {
       if (visible.length) {
         remSection.style.display = 'block';
         if (remCount) remCount.textContent = visible.length;
-        remList.innerHTML = visible.slice(0, 3).map((r) => `<div class="side-reminder-chip">${r.icon} <span>${escapeHtml(r.texto)}</span></div>`).join('');
+        remList.innerHTML = visible.slice(0, 3).map((r) => `<div class="side-reminder-chip"><span class="material-symbols-outlined" aria-hidden="true">${r.icon}</span> <span>${escapeHtml(r.texto)}</span></div>`).join('');
       } else {
         remSection.style.display = 'none';
       }
@@ -92,7 +129,7 @@ const Dashboard = {
     if (notifList) {
       notifList.innerHTML = '';
       if (!visible.length) {
-        notifList.innerHTML = '<p class="muted-text">Nenhum lembrete por enquanto.</p>';
+        notifList.innerHTML = '<p class="muted-text">Nenhum lembrete ainda.</p>';
       } else {
         visible.forEach((r) => notifList.appendChild(this._buildNotifItem(r, state.lidas.includes(r.id))));
       }
@@ -103,11 +140,11 @@ const Dashboard = {
     const el = document.createElement('div');
     el.className = `notif-item${isRead ? ' is-read' : ''}`;
     el.innerHTML = `
-      <span class="notif-item-icon">${reminder.icon}</span>
+      <span class="notif-item-icon"><span class="material-symbols-outlined" aria-hidden="true">${reminder.icon}</span></span>
       <span class="notif-item-text">${escapeHtml(reminder.texto)}</span>
       <div class="notif-item-actions">
-        <button class="notif-action-btn" data-action="read" title="Marcar como lida" aria-label="Marcar como lida" ${isRead ? 'disabled' : ''}>✓</button>
-        <button class="notif-action-btn" data-action="dismiss" title="Remover" aria-label="Remover notificação">✕</button>
+        <button class="notif-action-btn" data-action="read" title="Marcar como lida" aria-label="Marcar como lida" ${isRead ? 'disabled' : ''}><span class="material-symbols-outlined" aria-hidden="true">done</span></button>
+        <button class="notif-action-btn" data-action="dismiss" title="Ocultar" aria-label="Ocultar notificação"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
       </div>
     `;
     el.querySelector('[data-action="read"]').addEventListener('click', () => this.markNotificationRead(reminder.id));
@@ -154,6 +191,41 @@ const Dashboard = {
     this._renderStatTrend(data, 'potencial', 'potencialInvestimento', 'up');
   },
 
+  /** Card de Reserva de emergência no Dashboard — só aparece pra quem já
+      preencheu isso em Perfil (mesmo padrão dos outros stat-card: rótulo,
+      valor, sub-texto). */
+  _renderReservaCard(data) {
+    const card = document.getElementById('stat-reserva-card');
+    if (!card) return;
+    const reserva = data.reservaEmergencia;
+    if (!reserva || !reserva.possui || reserva.valorAtual == null) {
+      card.style.display = 'none';
+      return;
+    }
+    card.style.display = 'block';
+    const oculto = !!(data.configuracoes.ocultarValores || {}).reserva;
+    setText('stat-reserva', oculto ? '••••••' : formatBRL(reserva.valorAtual));
+    const subEl = document.getElementById('stat-reserva-sub');
+    if (subEl) {
+      if (reserva.metaValor) {
+        const pct = Math.min((reserva.valorAtual || 0) / reserva.metaValor * 100, 100);
+        // "Ocultar valores" só esconde o valor em reais guardado (o número
+        // sensível de verdade) — a % de progresso e a meta em si seguem
+        // visíveis, elas não expõem o saldo atual da pessoa.
+        subEl.innerHTML = `${pct.toFixed(0)}% da meta<br>Meta: ${formatBRL(reserva.metaValor)}`;
+      } else {
+        const meses = Calc.calculateEmergencyFundMonthsCovered(data);
+        if (meses != null) {
+          const mesesTxt = meses.toFixed(1).replace('.', ',');
+          subEl.textContent = `~${mesesTxt} ${mesesTxt === '1,0' ? 'mês' : 'meses'} de gastos cobertos`;
+        } else {
+          subEl.textContent = '';
+        }
+      }
+    }
+    this._updateEyeIcon('toggle-reserva-visibility', oculto);
+  },
+
   /**
    * Badge de variação (vs. mês anterior) num stat card.
    * `goodDirection`: 'up' quando subir é bom (renda, saldo, potencial) ou
@@ -181,7 +253,7 @@ const Dashboard = {
     const el = document.getElementById('stat-potencial-perfil-badge');
     if (!el) return;
     const label = INVESTOR_PROFILE_LABELS[perfil];
-    el.textContent = label || '';
+    el.innerHTML = label ? `<span class="risk-dot risk-dot-${perfil}" aria-hidden="true"></span>${label}` : '';
     el.style.display = label ? 'inline-flex' : 'none';
   },
 
@@ -201,7 +273,7 @@ const Dashboard = {
     this.render(appData);
   },
 
-  _renderRaioX(data, { percentComprometido, renda, gastos }) {
+  _renderRaioX(data, { percentComprometido, renda, gastos, saldo }) {
     const pct = percentComprometido == null ? 0 : Math.min(percentComprometido, 100);
     const limite = Calc.calculateCommitmentLimit(data);
     const nivel = limite ? Calc.calculateCommitmentLevel(percentComprometido, limite.percentual) : null;
@@ -229,22 +301,33 @@ const Dashboard = {
     const list = document.getElementById('dash-recent-expenses');
     if (!list) return;
     const mes = data.meta.mesReferenciaAtual;
-    const recentes = data.despesasVariaveis.filter((d) => d.mesReferencia === mes).slice(-5).reverse();
+    const doMes = data.despesasVariaveis.filter((d) => d.mesReferencia === mes);
+    const recentes = doMes.slice(-3).reverse();
+
+    const seeMoreBtn = document.getElementById('dash-recent-see-more');
+    if (seeMoreBtn) seeMoreBtn.style.display = doMes.length > recentes.length ? 'inline-block' : 'none';
 
     if (!recentes.length) {
       list.innerHTML = '<div class="coming-soon"><p>Nenhuma despesa lançada este mês ainda.</p></div>';
       return;
     }
 
-    list.innerHTML = recentes.map((d) => `
-      <div class="account-card">
-        <div class="account-main">
-          <div class="account-name">${escapeHtml(d.nome)}</div>
-          <div class="account-meta">${d.data ? formatDataCurta(d.data) : 'Data não informada'} · ${escapeHtml(d.categoria || 'Sem categoria')}</div>
+    list.innerHTML = recentes.map((d) => {
+      const icon = iconForCategory(d.categoria);
+      const color = colorForCategory(data, d.categoria);
+      return `
+      <div class="tx-row">
+        <div class="tx-icon" style="background:${hexToRgba(color, 0.15)};color:${color}">
+          <span class="material-symbols-outlined" aria-hidden="true">${icon}</span>
         </div>
-        <div class="account-value">${formatBRL(d.valor)}</div>
+        <div class="tx-body">
+          <div class="tx-name">${escapeHtml(d.nome)}</div>
+          <div class="tx-meta">${escapeHtml(d.categoria || 'Sem categoria')} · ${d.data ? formatDataCurta(d.data) : 'Data não informada'}</div>
+        </div>
+        <div class="tx-value">${formatBRL(d.valor)}</div>
       </div>
-    `).join('');
+    `;
+    }).join('');
   },
 
   /** Dois gráficos analíticos direto na home, desenhados em SVG nativo (sem dependência externa). */
@@ -267,11 +350,14 @@ const Dashboard = {
     // e já ganha um ponto "previsto" pro mês seguinte assim que houver alguma
     // despesa/renda real lançada pra lá — ver Calc.buildHistoricoComProjecao).
     const hist = Calc.buildHistoricoComProjecao(data);
-    const histLabels = hist.map((h) => formatMonthKeyShort(h.mes) + (h.previsto ? ' (prev.)' : ''));
+    const histLabels = hist.map((h) => formatMonthKeyShort(h.mes) + (h.previsto ? ' (prev.)' : h.emAndamento ? ' (atual)' : ''));
     SimpleCharts.line('chart-dash-analise', {
       labels: histLabels,
+      monotone: true, // com poucos pontos, a curva suave padrão "estourava" acima/abaixo dos valores reais
+      labelLastOnly: true, // valor do mês atual à mostra, sem precisar abrir Análises pra ver o número
+      labelFormatter: formatBRLShort,
       series: [
-        { name: 'Renda', data: hist.map((h) => h.renda), color: '#4B2E9E' },
+        { name: 'Renda', data: hist.map((h) => h.renda), color: '#4B2E9E', fillArea: true, fillOpacity: 0.22 },
         { name: 'Gastos', data: hist.map((h) => h.gastos), color: '#C0392B' },
       ],
     });

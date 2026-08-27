@@ -51,7 +51,7 @@ const Goals = {
         <div class="goal-progress-meta"><span>Faltam ${formatBRL(prog.restante)}</span></div>
         ${mensalNecessario != null ? `
           <div class="notice-card ${compat === 'compativel' ? 'success' : 'warning'}" style="margin-top:10px;">
-            ${compat === 'compativel' ? '🟢' : '🟡'}
+            ${compat === 'compativel' ? '<span class="material-symbols-outlined" aria-hidden="true">check_circle</span>' : '<span class="material-symbols-outlined" aria-hidden="true">warning</span>'}
             Para alcançar em ${m.prazoMeses} mês(es), guarde ~${formatBRL(mensalNecessario)}/mês.
             ${compat === 'compativel' ? 'Compatível com sua capacidade estimada.' : 'Acima da sua capacidade estimada — considere aumentar o prazo ou reduzir o valor mensal.'}
           </div>
@@ -77,7 +77,7 @@ const Goals = {
   },
 
   async deleteGoal(id) {
-    if (!await confirmDialog('Excluir esta meta?', { title: 'Excluir meta', confirmLabel: 'Excluir', danger: true })) return;
+    if (!await confirmDialog('Excluir esta meta? Essa ação não pode ser desfeita.', { title: 'Excluir meta', confirmLabel: 'Excluir', danger: true })) return;
     appData.metas = appData.metas.filter((m) => m.id !== id);
     Storage.save(appData);
     this.render(appData);
@@ -252,9 +252,9 @@ const SpendCheck = {
     if (Number.isNaN(valor) || valor <= 0) { alert('Informe um valor válido.'); return; }
     const result = Calc.calculateSpendCheck(appData, valor);
     const map = {
-      verde: { cls: 'success', texto: `🟢 Sua margem comporta esse gasto. Saldo restante estimado: ${formatBRL(result.saldoApos)}.` },
-      amarelo: { cls: 'warning', texto: `🟡 É possível, mas reduzirá sua capacidade de investimento. Saldo restante estimado: ${formatBRL(result.saldoApos)}.` },
-      vermelho: { cls: 'danger', texto: `🔴 Esse gasto ultrapassaria sua margem planejada. Saldo restante estimado: ${formatBRL(result.saldoApos)}.` },
+      verde: { cls: 'success', texto: `<span class="material-symbols-outlined" aria-hidden="true">check_circle</span> Sua margem comporta esse gasto. Saldo restante estimado: ${formatBRL(result.saldoApos)}.` },
+      amarelo: { cls: 'warning', texto: `<span class="material-symbols-outlined" aria-hidden="true">warning</span> É possível, mas reduzirá sua capacidade de investimento. Saldo restante estimado: ${formatBRL(result.saldoApos)}.` },
+      vermelho: { cls: 'danger', texto: `<span class="material-symbols-outlined" aria-hidden="true">error</span> Esse gasto ultrapassaria sua margem planejada. Saldo restante estimado: ${formatBRL(result.saldoApos)}.` },
     };
     const info = map[result.nivel];
     document.getElementById('spend-result').innerHTML = `<div class="notice-card ${info.cls}">${info.texto}</div>`;

@@ -52,19 +52,6 @@ const Calc = {
     return sum(data.parcelamentos.map((p) => p.valorParcela));
   },
 
-  /** Detalha, por parcelamento, quantas parcelas faltam e quando ele termina (quando é possível calcular). */
-  calculateInstallmentStatus(parcelamento) {
-    const { totalParcelas, parcelaAtual, parcelasRestantes, statusDescricao } = parcelamento;
-    if (parcelasRestantes != null) {
-      return {
-        parcelasRestantes,
-        completo: totalParcelas != null && parcelaAtual != null,
-        descricao: statusDescricao || `${parcelasRestantes} parcela(s) restante(s)`,
-      };
-    }
-    return { parcelasRestantes: null, completo: false, descricao: 'Não informado' };
-  },
-
   /** Total de despesas do mês: fixas + variáveis do mês + parcelas ativas. */
   calculateMonthlyExpenses(data, mesReferencia) {
     return (
@@ -85,6 +72,15 @@ const Calc = {
     if (renda <= 0) return null;
     const gastos = this.calculateMonthlyExpenses(data, mesReferencia);
     return (gastos / renda) * 100;
+  },
+
+  /** Quantos meses do padrão de gasto atual a reserva de emergência cobre — referência simples de quanto tempo ela sustentaria o usuário sem renda. */
+  calculateEmergencyFundMonthsCovered(data) {
+    const reserva = data.reservaEmergencia;
+    if (!reserva || reserva.valorAtual == null) return null;
+    const gastos = this.calculateMonthlyExpenses(data, data.meta.mesReferenciaAtual);
+    if (!gastos) return null;
+    return reserva.valorAtual / gastos;
   },
 
   /** Percentual do saldo (já líquido da margem de segurança, se configurada) considerado "investível" em cada perfil de investidor. */
@@ -252,9 +248,29 @@ const Calc = {
    */
   buildHistoricoComProjecao(data, mesesAFrente = 3) {
     const historico = data.historicoMensal || [];
-    if (!this.hasDataForNextMonth(data)) return historico;
-
     const mesAtual = data.meta.mesReferenciaAtual;
+
+    // O mês corrente só entra em historicoMensal quando a pessoa vira o mês
+    // ou salva um snapshot manual — sem isso, os gráficos de vários meses
+    // (Renda x gastos, Evolução mensal, Evolução do potencial) ficavam
+    // vazios pra qualquer usuário antes do primeiro fechamento de mês,
+    // mesmo já com renda/gastos lançados este mês. Acrescenta um ponto "ao
+    // vivo" pro mês atual (marcado com emAndamento, não com previsto — é
+    // dado real de agora, não projeção), a menos que ele já tenha sido
+    // salvo manualmente no histórico.
+    const mesAtualJaArquivado = historico.some((h) => h.mes === mesAtual);
+    const historicoComAtual = mesAtualJaArquivado ? historico : [...historico, {
+      mes: mesAtual,
+      renda: this.calculateMonthlyIncome(data, mesAtual),
+      gastos: this.calculateMonthlyExpenses(data, mesAtual),
+      saldo: this.calculateRemainingBalance(data, mesAtual),
+      percentualComprometido: this.calculateCommittedPercentage(data, mesAtual),
+      potencialInvestimento: this.calculateInvestmentCapacityByProfile(data, mesAtual).valor,
+      emAndamento: true,
+    }];
+
+    if (!this.hasDataForNextMonth(data)) return historicoComAtual;
+
     const projecoes = [];
     for (let i = 1; i <= mesesAFrente; i++) {
       const mes = addMonths(mesAtual, i);
@@ -276,7 +292,7 @@ const Calc = {
         previsto: true,
       });
     }
-    return [...historico, ...projecoes];
+    return [...historicoComAtual, ...projecoes];
   },
 
   /**
@@ -455,23 +471,23 @@ const Calc = {
     (data.inconsistenciasDetectadas || [])
       .filter((i) => !i.resolvida)
       .forEach((i) => {
-        reminders.push({ id: `inc-${i.id}`, icon: '⚠️', texto: i.descricao });
+        reminders.push({ id: `inc-${i.id}`, icon: 'warning', texto: i.descricao });
       });
 
     this.calculateUpcomingEndings(data, 0).forEach((x) => {
-      reminders.push({ id: `parcfim-${x.parcelamento.id}`, icon: '💡', texto: `Última parcela de "${x.parcelamento.nome}" é cobrada este mês.` });
+      reminders.push({ id: `parcfim-${x.parcelamento.id}`, icon: 'lightbulb', texto: `Última parcela de "${x.parcelamento.nome}" é cobrada este mês.` });
     });
 
     data.despesasRecorrentes
       .filter((d) => d.status === 'Pendente' && d.vencimento)
       .forEach((d) => {
-        reminders.push({ id: `rec-${d.id}`, icon: '⚠️', texto: `${d.nome} pendente, vencimento ${d.vencimento}.` });
+        reminders.push({ id: `rec-${d.id}`, icon: 'warning', texto: `${d.nome} pendente, vencimento ${d.vencimento}.` });
       });
 
     data.metas.forEach((m) => {
       const prog = this.calculateGoalProgress(m);
       if (prog && prog.percent >= 80 && prog.percent < 100) {
-        reminders.push({ id: `meta-${m.id}`, icon: '🎯', texto: `Meta "${m.nome}" está ${formatPercent(prog.percent)} concluída.` });
+        reminders.push({ id: `meta-${m.id}`, icon: 'track_changes', texto: `Meta "${m.nome}" está ${formatPercent(prog.percent)} concluída.` });
       }
     });
 
@@ -532,18 +548,18 @@ const Calc = {
 
     if (pct != null && limite) {
       const nivel = this.calculateCommitmentLevel(pct, limite.percentual);
-      if (nivel === 'ultrapassado') alerts.push({ id: 'limite-comprometimento', icon: '⚠️', tipo: 'danger', texto: `Limite ultrapassado: ${formatPercent(pct)} da renda comprometida (limite: ${limite.percentual}%).` });
-      else if (nivel === 'atingido') alerts.push({ id: 'limite-comprometimento', icon: '⚠️', tipo: 'warning', texto: `Você atingiu seu limite de ${limite.percentual}% da renda comprometida.` });
-      else if (nivel === 'aproximando') alerts.push({ id: 'limite-comprometimento', icon: '⚠️', tipo: 'info', texto: `Você está se aproximando do seu limite de ${limite.percentual}% (hoje: ${formatPercent(pct)}).` });
+      if (nivel === 'ultrapassado') alerts.push({ id: 'limite-comprometimento', icon: 'warning', tipo: 'danger', texto: `Limite ultrapassado: ${formatPercent(pct)} da renda comprometida (limite: ${limite.percentual}%).` });
+      else if (nivel === 'atingido') alerts.push({ id: 'limite-comprometimento', icon: 'warning', tipo: 'warning', texto: `Você atingiu seu limite de ${limite.percentual}% da renda comprometida.` });
+      else if (nivel === 'aproximando') alerts.push({ id: 'limite-comprometimento', icon: 'warning', tipo: 'info', texto: `Você está se aproximando do seu limite de ${limite.percentual}% (hoje: ${formatPercent(pct)}).` });
     } else if (pct != null) {
-      if (pct >= 90) alerts.push({ id: 'renda-utilizada', icon: '⚠️', tipo: 'danger', texto: `Você já utilizou ${formatPercent(pct)} da sua renda este mês.` });
-      else if (pct >= 80) alerts.push({ id: 'renda-utilizada', icon: '⚠️', tipo: 'warning', texto: `Você já utilizou ${formatPercent(pct)} da sua renda este mês.` });
+      if (pct >= 90) alerts.push({ id: 'renda-utilizada', icon: 'warning', tipo: 'danger', texto: `Você já utilizou ${formatPercent(pct)} da sua renda este mês.` });
+      else if (pct >= 80) alerts.push({ id: 'renda-utilizada', icon: 'warning', tipo: 'warning', texto: `Você já utilizou ${formatPercent(pct)} da sua renda este mês.` });
     }
 
     const upcoming = this.calculateUpcomingEndings(data, 0);
     if (upcoming.length) {
       const margem = this.calculateMarginFreedNextMonth(data);
-      alerts.push({ id: 'parcelamentos-terminando', icon: '✓', tipo: 'success', texto: `${upcoming.length} parcelamento(s) terminam este mês, liberando ${formatBRL(margem)}/mês a partir do próximo.` });
+      alerts.push({ id: 'parcelamentos-terminando', icon: 'check_circle', tipo: 'success', texto: `Você tem ${upcoming.length} parcelamento(s) terminando este mês, liberando ${formatBRL(margem)}/mês a partir do próximo.` });
     }
 
     const historico = data.historicoMensal || [];
@@ -553,20 +569,22 @@ const Calc = {
       if (anterior.gastos > 0) {
         const variacao = ((atual.gastos - anterior.gastos) / anterior.gastos) * 100;
         if (variacao <= -1) {
-          alerts.push({ id: 'variacao-gastos', icon: '📈', tipo: 'success', texto: `Seus gastos diminuíram ${formatPercent(Math.abs(variacao))} em relação ao mês anterior.` });
+          // Ícone acompanha o sentido real do dado (gasto caiu = seta pra
+          // baixo) — o emoji 📈 usado antes aqui apontava pro lado errado.
+          alerts.push({ id: 'variacao-gastos', icon: 'trending_down', tipo: 'success', texto: `Seus gastos diminuíram ${formatPercent(Math.abs(variacao))} em relação ao mês anterior.` });
         } else if (variacao >= 1) {
-          alerts.push({ id: 'variacao-gastos', icon: '📊', tipo: 'warning', texto: `Seus gastos aumentaram ${formatPercent(variacao)} em relação ao mês anterior.` });
+          alerts.push({ id: 'variacao-gastos', icon: 'trending_up', tipo: 'warning', texto: `Seus gastos aumentaram ${formatPercent(variacao)} em relação ao mês anterior.` });
         }
       }
       if (atual.potencialInvestimento > anterior.potencialInvestimento) {
-        alerts.push({ id: 'variacao-potencial', icon: '💰', tipo: 'success', texto: 'Sua capacidade potencial de investimento aumentou em relação ao mês anterior.' });
+        alerts.push({ id: 'variacao-potencial', icon: 'savings', tipo: 'success', texto: 'Sua capacidade potencial de investimento aumentou em relação ao mês anterior.' });
       } else if (atual.potencialInvestimento < anterior.potencialInvestimento) {
-        alerts.push({ id: 'variacao-potencial', icon: '💸', tipo: 'warning', texto: 'Sua capacidade potencial de investimento diminuiu em relação ao mês anterior.' });
+        alerts.push({ id: 'variacao-potencial', icon: 'money_off', tipo: 'warning', texto: 'Sua capacidade potencial de investimento diminuiu em relação ao mês anterior.' });
       }
     }
 
     if (!alerts.length) {
-      alerts.push({ id: 'sem-alertas', icon: 'ℹ️', tipo: 'info', texto: 'Ainda não há alertas — eles aparecem conforme mais meses forem registrados no histórico.' });
+      alerts.push({ id: 'sem-alertas', icon: 'info', tipo: 'info', texto: 'Ainda não há alertas — eles aparecem conforme mais meses forem registrados no histórico.' });
     }
     return alerts;
   },
