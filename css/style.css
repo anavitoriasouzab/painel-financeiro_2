@@ -1362,7 +1362,7 @@ section.view.active { display: block; animation: view-fade-in 0.25s ease; }
 .sc-vbar-track { width: 60%; max-width: 34px; flex: 1; display: flex; align-items: flex-end; background: var(--surface-soft); border-radius: 6px 6px 0 0; overflow: hidden; }
 .sc-vbar-fill { width: 100%; border-radius: 6px 6px 0 0; transition: height 0.5s cubic-bezier(.22,1,.36,1); }
 .sc-vbar-col:hover .sc-vbar-fill { filter: brightness(1.1); }
-.sc-vbar-label { font-size: 11px; color: var(--text-secondary); text-align: center; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.sc-vbar-label { font-size: 11px; color: var(--text-secondary); text-align: center; line-height: 1.25; display: -webkit-box; line-clamp: 2; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
 .sc-hbar-wrap { display: flex; flex-direction: column; gap: 12px; padding: 4px 0; }
 .sc-hbar-row { display: grid; grid-template-columns: 88px 1fr auto; align-items: center; gap: 8px; border-radius: 8px; padding: 3px 5px; margin: -3px -5px; transition: background 0.15s ease, transform 0.15s ease; }
