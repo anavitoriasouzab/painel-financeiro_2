@@ -40,9 +40,9 @@ const Installments = {
           <div class="account-meta">${c.diaFechamento != null ? `Fechamento: dia ${c.diaFechamento}` : 'Fechamento não informado'} · ${c.diaVencimento != null ? `Vencimento: dia ${c.diaVencimento}` : 'Vencimento não informado'}</div>
           ${c.limite != null ? `<div class="account-meta">Limite disponível: ${formatBRL(c.limiteDisponivel != null ? c.limiteDisponivel : c.limite)} / ${formatBRL(c.limite)}</div>` : ''}
         </div>
-        <div class="account-actions">
-          <button class="mini-btn" data-action="edit" data-id="${c.id}">Editar</button>
-          <button class="mini-btn danger" data-action="delete" data-id="${c.id}">Excluir</button>
+        <div class="account-icon-col">
+          <button class="mini-btn icon-btn" data-action="edit" data-id="${c.id}" title="Editar" aria-label="Editar cartão"><span class="material-symbols-outlined" aria-hidden="true">edit</span></button>
+          <button class="mini-btn icon-btn danger" data-action="delete" data-id="${c.id}" title="Excluir" aria-label="Excluir cartão"><span class="material-symbols-outlined" aria-hidden="true">delete</span></button>
         </div>
       </div>
     `).join('');
@@ -127,6 +127,13 @@ const Installments = {
     toast('Cartão excluído.');
   },
 
+  /**
+   * "Contas que acabam em breve" — não é só uma lista, é um indicador de
+   * quanto dinheiro volta pro orçamento e quando: destaque grande pro valor
+   * liberado, agrupado por mês de término (cada grupo já mostra quantas
+   * contas e quanto total libera, então o "termina em X" por item vira
+   * redundante e sai da linha).
+   */
   _renderUpcoming(data) {
     const wrap = document.getElementById('upcoming-endings');
     if (!wrap) return;
@@ -136,16 +143,49 @@ const Installments = {
       return;
     }
     const margem = Calc.calculateMarginFreedNextMonth(data);
+
+    // A lista já vem ordenada cronologicamente (calculateUpcomingEndings),
+    // então itens do mesmo mês de término sempre ficam adjacentes — só
+    // precisa juntar em grupos, sem reordenar nada.
+    const grupos = [];
+    upcoming.forEach((x) => {
+      const ultimo = grupos[grupos.length - 1];
+      if (ultimo && ultimo.mesKey === x.endMonthKey) {
+        ultimo.itens.push(x);
+      } else {
+        grupos.push({ mesKey: x.endMonthKey, mesLabel: formatMonthKey(x.endMonthKey), itens: [x] });
+      }
+    });
+
     wrap.innerHTML = `
-      ${margem > 0 ? `<div class="notice-card success" style="margin-bottom:10px;"><span class="material-symbols-outlined" aria-hidden="true">savings</span> Margem liberada a partir do próximo mês: <strong>${formatBRL(margem)}</strong></div>` : ''}
-      <div class="ending-list">
-        ${upcoming.map((x) => `
-          <div class="ending-row">
-            <span class="name">${escapeHtml(x.parcelamento.nome)}</span>
-            <span class="detail">${formatBRL(x.parcelamento.valorParcela)}/mês · termina em ${x.endMonthLabel}</span>
+      ${margem > 0 ? `
+        <div class="notice-card success ending-highlight">
+          <span class="material-symbols-outlined" aria-hidden="true">savings</span>
+          <div>
+            <div class="ending-highlight-label">Liberado a partir do próximo mês</div>
+            <div class="ending-highlight-value">+ ${formatBRL(margem)}</div>
           </div>
-        `).join('')}
-      </div>
+        </div>
+      ` : ''}
+      ${grupos.map((g) => {
+        const total = sum(g.itens.map((x) => x.parcelamento.valorParcela));
+        return `
+          <div class="ending-month-group">
+            <div class="ending-month-header">
+              <span class="ending-month-name">${g.mesLabel}</span>
+              <span class="ending-month-total">${g.itens.length} conta${g.itens.length > 1 ? 's' : ''} · ${formatBRL(total)}/mês</span>
+            </div>
+            <div class="ending-list">
+              ${g.itens.map((x) => `
+                <div class="ending-row">
+                  <span class="name">${escapeHtml(toTitleCase(x.parcelamento.nome))}</span>
+                  <span class="value">${formatBRL(x.parcelamento.valorParcela)}/mês</span>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }).join('')}
     `;
   },
 
@@ -175,10 +215,10 @@ const Installments = {
       </div>
       <div class="account-side">
         <div class="account-value">${formatBRL(p.valorParcela)}<span class="unit">/mês</span></div>
-      </div>
-      <div class="account-actions">
-        <button class="mini-btn" data-action="edit">Editar</button>
-        <button class="mini-btn danger" data-action="delete">Excluir</button>
+        <div class="account-side-row">
+          <button class="mini-btn icon-btn" data-action="edit" title="Editar" aria-label="Editar parcelamento"><span class="material-symbols-outlined" aria-hidden="true">edit</span></button>
+          <button class="mini-btn icon-btn danger" data-action="delete" title="Excluir" aria-label="Excluir parcelamento"><span class="material-symbols-outlined" aria-hidden="true">delete</span></button>
+        </div>
       </div>
     `;
     el.querySelector('[data-action="edit"]').addEventListener('click', () => this.openForm(p.id));
@@ -239,6 +279,20 @@ const Installments = {
 
   async submitForm(evt) {
     evt.preventDefault();
+    // Trava contra duplo clique/duplo toque no botão de salvar — sem isso,
+    // um segundo clique antes do primeiro terminar (ex.: confirmCommitmentImpact
+    // resolvendo true na hora, sem abrir diálogo nenhum, quando não há limite
+    // configurado) criava dois parcelamentos idênticos.
+    if (this._submitting) return;
+    this._submitting = true;
+    try {
+      await this._doSubmitForm();
+    } finally {
+      this._submitting = false;
+    }
+  },
+
+  async _doSubmitForm() {
     const nome = document.getElementById('installment-nome').value.trim();
     const valorParcela = parseFloat(document.getElementById('installment-valor').value);
     const totalRaw = document.getElementById('installment-total').value;
@@ -285,3 +339,8 @@ const Installments = {
     toast(this.editingId ? 'Parcelamento atualizado.' : 'Parcelamento adicionado.');
   },
 };
+
+/** Só pra exibição (não altera o nome salvo) — parcelamentos cadastrados em maiúsculas, minúsculas ou misturado aparecem todos no mesmo padrão nesta lista. */
+function toTitleCase(str) {
+  return str.replace(/\S+/g, (palavra) => palavra.charAt(0).toUpperCase() + palavra.slice(1).toLowerCase());
+}

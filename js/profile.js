@@ -272,7 +272,7 @@ const Income = {
   _buildCard(r) {
     const isExtra = r.frequencia === 'unica';
     const meta = isExtra
-      ? `Extra · ${formatMesReferencia(r.mesReferencia)}`
+      ? `Extra · ${formatMonthKey(r.mesReferencia)}`
       : `Fixa · ${r.diaRecebimento != null ? `recebimento dia ${r.diaRecebimento}` : 'dia de recebimento não informado'}`;
     return `
       <div class="account-card">
@@ -282,10 +282,10 @@ const Income = {
         </div>
         <div class="account-side">
           <div class="account-value">${formatBRL(r.valor)}</div>
-        </div>
-        <div class="account-actions">
-          <button class="mini-btn" data-action="edit" data-id="${r.id}">Editar</button>
-          <button class="mini-btn danger" data-action="delete" data-id="${r.id}">Excluir</button>
+          <div class="account-side-row">
+            <button class="mini-btn icon-btn" data-action="edit" data-id="${r.id}" title="Editar" aria-label="Editar renda"><span class="material-symbols-outlined" aria-hidden="true">edit</span></button>
+            <button class="mini-btn icon-btn danger" data-action="delete" data-id="${r.id}" title="Excluir" aria-label="Excluir renda"><span class="material-symbols-outlined" aria-hidden="true">delete</span></button>
+          </div>
         </div>
       </div>
     `;

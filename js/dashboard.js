@@ -170,7 +170,7 @@ const Dashboard = {
 
   _renderHeader(mes) {
     const el = document.getElementById('current-month-label');
-    if (el) el.textContent = formatMesReferencia(mes);
+    if (el) el.textContent = formatMonthKey(mes);
   },
 
   _renderStats(data, { renda, gastos, saldo, potencial }) {
@@ -316,7 +316,7 @@ const Dashboard = {
       const icon = iconForCategory(d.categoria);
       const color = colorForCategory(data, d.categoria);
       return `
-      <div class="tx-row">
+      <div class="tx-row" role="button" tabindex="0" onclick="Dashboard.goToExpense('${escapeAttr(d.id)}')" onkeydown="if(event.key==='Enter')Dashboard.goToExpense('${escapeAttr(d.id)}')">
         <div class="tx-icon" style="background:${hexToRgba(color, 0.15)};color:${color}">
           <span class="material-symbols-outlined" aria-hidden="true">${icon}</span>
         </div>
@@ -328,6 +328,13 @@ const Dashboard = {
       </div>
     `;
     }).join('');
+  },
+
+  /** Clicar numa despesa recente leva direto pra ela em Contas > Variáveis, já aberta pra edição — em vez de só cair na aba e precisar procurar de novo. */
+  goToExpense(id) {
+    navigateTo('contas');
+    Accounts.switchToTab('variaveis');
+    Accounts.openForm('variavel', id);
   },
 
   /** Dois gráficos analíticos direto na home, desenhados em SVG nativo (sem dependência externa). */
@@ -390,11 +397,6 @@ function buildRaioXMessage(percentComprometido, renda, gastos, limite, nivel) {
   return `Sua renda está ${formatPercent(percentComprometido)} comprometida neste mês, deixando ${formatBRL(renda - gastos)} de margem.`;
 }
 
-function formatMesReferencia(mesRef) {
-  const [ano, mes] = mesRef.split('-');
-  const nomes = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-  return `${nomes[parseInt(mes, 10) - 1]} de ${ano}`;
-}
 
 function setText(id, text) {
   const el = document.getElementById(id);

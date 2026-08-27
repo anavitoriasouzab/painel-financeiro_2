@@ -55,9 +55,15 @@ const ARRAY_TABLES = [
   { table: 'cartoes', key: 'cartoes' }, // primeiro: parcelamentos.cartao_id depende de cartoes.id existir
   { table: 'rendas', key: 'rendas' },
   { table: 'categorias', key: 'categorias', stringItem: true, stringCol: 'nome' },
-  { table: 'despesas_recorrentes', key: 'despesasRecorrentes' },
+  // Essas duas têm `rpcReplace`: substituição via função no Postgres (ver
+  // migration 0010) que faz delete+insert numa transação só, em vez de duas
+  // chamadas separadas como as outras tabelas — as duas ganharam uma
+  // constraint de unicidade (evita repetir despesa/parcelamento idêntico),
+  // e sem transação um insert rejeitado deixaria a tabela vazia até o
+  // próximo save funcionar (o delete já teria sido efetivado sozinho).
+  { table: 'despesas_recorrentes', key: 'despesasRecorrentes', rpcReplace: 'replace_despesas_recorrentes' },
   { table: 'despesas_variaveis', key: 'despesasVariaveis' },
-  { table: 'parcelamentos', key: 'parcelamentos' },
+  { table: 'parcelamentos', key: 'parcelamentos', rpcReplace: 'replace_parcelamentos' },
   { table: 'metas', key: 'metas' },
   { table: 'investimentos', key: 'investimentos' },
   { table: 'historico_mensal', key: 'historicoMensal' },
@@ -248,6 +254,17 @@ const Storage = {
       const hasData = await this._hasRemoteData(uid);
       if (!hasData) {
         const seed = this._buildFirstLoginSeed();
+        // _hasRemoteData + escrever o seed não é atômico — se Storage.load()
+        // rodar duas vezes ao mesmo tempo (duas abas abertas no primeiro
+        // acesso, por exemplo), as duas passavam por aqui achando que não
+        // havia dado nenhum ainda, e cada uma gravava o MESMO backup local
+        // com IDs novos — resultado: cada conta/parcelamento duplicado.
+        // _claimFirstLogin usa um INSERT (não upsert) em `perfil` como
+        // trava: `user_id` é chave primária, então só a PRIMEIRA chamada
+        // consegue inserir; a(s) outra(s) recebe(m) violação de unicidade e
+        // cai(em) para só ler o que a primeira já gravou.
+        const claimed = await this._claimFirstLogin(uid, seed);
+        if (!claimed) return await this._readAll(uid);
         await this._writeAll(seed, uid);
         // Evita que uma segunda conta feita no mesmo navegador reimporte o
         // mesmo backup local (e colida com os IDs já migrados para a primeira).
@@ -272,7 +289,7 @@ const Storage = {
     } catch (e) {
       console.error('Falha ao salvar no Supabase.', e);
       if (typeof toast === 'function') {
-        toast('⚠️ Não foi possível salvar suas alterações. Verifique sua conexão e tente novamente.');
+        toast(e.userFacing ? `⚠️ ${e.message}` : '⚠️ Não foi possível salvar suas alterações. Verifique sua conexão e tente novamente.');
       }
     }
   },
@@ -334,6 +351,26 @@ const Storage = {
     const { data, error } = await supabaseClient.from('perfil').select('user_id').eq('user_id', uid).maybeSingle();
     if (error) throw error;
     return !!data;
+  },
+
+  /**
+   * "Trava" pra garantir que só uma chamada de load() semeia os dados do
+   * primeiro login, mesmo se duas rodarem ao mesmo tempo. INSERT (não
+   * upsert) na linha de `perfil` — `user_id` é chave primária, então a
+   * segunda tentativa recebe violação de unicidade (código 23505) e sabe
+   * que perdeu a corrida.
+   */
+  async _claimFirstLogin(uid, seed) {
+    const { error } = await supabaseClient.from('perfil').insert({
+      user_id: uid,
+      criado_em: seed.meta.criadoEm,
+      mes_referencia_atual: seed.meta.mesReferenciaAtual,
+    });
+    if (error) {
+      if (error.code === '23505') return false;
+      throw error;
+    }
+    return true;
   },
 
   async _readAll(uid) {
@@ -427,14 +464,20 @@ const Storage = {
     const reservaRes = await supabaseClient.from('reserva_emergencia').upsert(reservaRow, { onConflict: 'user_id' });
     if (reservaRes.error) throw reservaRes.error;
 
-    const deleteResults = await Promise.all(ARRAY_TABLES.map((t) => supabaseClient.from(t.table).delete().eq('user_id', uid)));
+    const genericTables = ARRAY_TABLES.filter((t) => !t.rpcReplace);
+    const deleteResults = await Promise.all(genericTables.map((t) => supabaseClient.from(t.table).delete().eq('user_id', uid)));
     deleteResults.forEach((r) => { if (r.error) throw r.error; });
 
-    // cartoes precisa existir antes de parcelamentos (foreign key cartao_id).
-    for (const t of ARRAY_TABLES) {
+    // cartoes precisa existir antes de parcelamentos (foreign key cartao_id) —
+    // inclusive antes da substituição atômica de parcelamentos logo abaixo.
+    for (const t of genericTables) {
       if (t.table === 'cartoes') await this._insertTable(t, data, uid);
     }
-    await Promise.all(ARRAY_TABLES.filter((t) => t.table !== 'cartoes').map((t) => this._insertTable(t, data, uid)));
+    await Promise.all(genericTables.filter((t) => t.table !== 'cartoes').map((t) => this._insertTable(t, data, uid)));
+
+    for (const t of ARRAY_TABLES.filter((t) => t.rpcReplace)) {
+      await this._replaceTableAtomic(t, data, uid);
+    }
   },
 
   async _insertTable(conf, data, uid) {
@@ -449,5 +492,24 @@ const Storage = {
         });
     const { error } = await supabaseClient.from(conf.table).insert(rows);
     if (error) throw error;
+  },
+
+  /** Mesma transformação de _insertTable, só que via RPC (delete+insert atômico) em vez de duas chamadas separadas — ver comentário em ARRAY_TABLES. */
+  async _replaceTableAtomic(conf, data, uid) {
+    const items = data[conf.key] || [];
+    const rows = items.map((item) => {
+      const row = itemToSnakeRow(item, uid);
+      (conf.omitFields || []).forEach((f) => { delete row[camelToSnake(f)]; });
+      return row;
+    });
+    const { error } = await supabaseClient.rpc(conf.rpcReplace, { p_user_id: uid, p_rows: rows });
+    if (error) {
+      if (error.code === '23505') {
+        const err = new Error(`Duas entradas em "${conf.table.replace(/_/g, ' ')}" ficaram com o mesmo nome, categoria e valor — ajuste uma delas antes de salvar.`);
+        err.userFacing = true;
+        throw err;
+      }
+      throw error;
+    }
   },
 };

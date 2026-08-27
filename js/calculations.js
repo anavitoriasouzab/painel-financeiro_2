@@ -23,17 +23,24 @@ const Calc = {
   },
 
   /**
-   * Soma das despesas recorrentes/fixas ativas no mês informado. Normalmente
-   * independe do mês, exceto quando a despesa só passa a valer a partir de um
-   * mês futuro (`inicioMesReferencia`, definido quando ela é cadastrada com
-   * data de compra no cartão depois do fechamento da fatura — ver
-   * `calculateExpenseMonth`). Sem `mesReferencia` informado, conta todas
-   * (compatível com chamadas antigas que não tinham essa regra).
+   * Uma despesa recorrente conta no mês informado se não tiver
+   * `inicioMesReferencia` definido, ou se esse mês de início já chegou (ela
+   * pode ter sido cadastrada com uma data de compra no cartão que só cai
+   * numa fatura futura — ver `calculateExpenseMonth`). Sem `mesReferencia`
+   * informado, conta sempre (compatível com chamadas antigas). Usar em
+   * QUALQUER lugar que trata despesasRecorrentes como "contas deste mês" —
+   * sem isso, uma conta que só passa a valer em novembro aparece contada
+   * (ou lembrada) já em setembro.
    */
+  isDespesaRecorrenteAtiva(d, mesReferencia) {
+    return !d.inicioMesReferencia || !mesReferencia || d.inicioMesReferencia <= mesReferencia;
+  },
+
+  /** Soma das despesas recorrentes/fixas ativas no mês informado. */
   calculateFixedExpenses(data, mesReferencia) {
     return sum(
       data.despesasRecorrentes
-        .filter((d) => !d.inicioMesReferencia || !mesReferencia || d.inicioMesReferencia <= mesReferencia)
+        .filter((d) => this.isDespesaRecorrenteAtiva(d, mesReferencia))
         .map((d) => d.valor)
     );
   },
@@ -336,7 +343,7 @@ const Calc = {
       });
 
     data.despesasRecorrentes.forEach((d) => {
-      if (d.inicioMesReferencia && d.inicioMesReferencia > mesReferencia) return;
+      if (!this.isDespesaRecorrenteAtiva(d, mesReferencia)) return;
       const match = (d.vencimento || '').match(/(\d{1,2})/);
       if (!match) return;
       const day = Math.min(Math.max(parseInt(match[1], 10), 1), daysInMonth);
@@ -479,7 +486,7 @@ const Calc = {
     });
 
     data.despesasRecorrentes
-      .filter((d) => d.status === 'Pendente' && d.vencimento)
+      .filter((d) => d.status === 'Pendente' && d.vencimento && this.isDespesaRecorrenteAtiva(d, data.meta.mesReferenciaAtual))
       .forEach((d) => {
         reminders.push({ id: `rec-${d.id}`, icon: 'warning', texto: `${d.nome} pendente, vencimento ${d.vencimento}.` });
       });
@@ -513,11 +520,20 @@ const Calc = {
    */
   calculateTopExpenses(data, mesReferencia, limit = 8) {
     const itens = [];
-    data.despesasRecorrentes.forEach((d) => itens.push({ nome: d.nome, valor: d.valor, categoria: d.categoria }));
+    // `mes` vai junto em cada item pra dar pra conferir de onde veio esse
+    // valor (ver "Mês" na tabela de Maiores despesas do relatório) — nas
+    // variáveis é o mesReferencia real do lançamento (se algum dia houver
+    // um bug de atribuição de mês, aparece aqui na hora); recorrentes e
+    // parcelamentos não têm um "mês da compra" próprio (são cobranças que
+    // se repetem), então mostram o mês do próprio relatório, que é quando
+    // essa cobrança está de fato acontecendo.
+    data.despesasRecorrentes
+      .filter((d) => this.isDespesaRecorrenteAtiva(d, mesReferencia))
+      .forEach((d) => itens.push({ nome: d.nome, valor: d.valor, categoria: d.categoria, mes: mesReferencia }));
     data.despesasVariaveis
       .filter((d) => d.mesReferencia === mesReferencia)
-      .forEach((d) => itens.push({ nome: d.nome, valor: d.valor, categoria: d.categoria }));
-    data.parcelamentos.forEach((p) => itens.push({ nome: p.nome, valor: p.valorParcela, categoria: p.categoria }));
+      .forEach((d) => itens.push({ nome: d.nome, valor: d.valor, categoria: d.categoria, mes: d.mesReferencia }));
+    data.parcelamentos.forEach((p) => itens.push({ nome: p.nome, valor: p.valorParcela, categoria: p.categoria, mes: mesReferencia }));
     return itens.sort((a, b) => b.valor - a.valor).slice(0, limit);
   },
 
@@ -527,7 +543,9 @@ const Calc = {
       const key = categoria || 'Não informado';
       totals[key] = (totals[key] || 0) + valor;
     };
-    data.despesasRecorrentes.forEach((d) => add(d.categoria, d.valor));
+    data.despesasRecorrentes
+      .filter((d) => this.isDespesaRecorrenteAtiva(d, mesReferencia))
+      .forEach((d) => add(d.categoria, d.valor));
     data.despesasVariaveis
       .filter((d) => d.mesReferencia === mesReferencia)
       .forEach((d) => add(d.categoria, d.valor));
@@ -594,7 +612,7 @@ function sum(arr) {
   return arr.reduce((acc, v) => acc + (v || 0), 0);
 }
 
-const MES_NOMES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+const MES_ABREV = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
 /** Soma N meses a uma chave "AAAA-MM", devolvendo outra chave "AAAA-MM". */
 function addMonths(mesRefKey, n) {
@@ -605,10 +623,10 @@ function addMonths(mesRefKey, n) {
   return `${novoAno}-${String(novoMes).padStart(2, '0')}`;
 }
 
-/** Formata "AAAA-MM" como "Setembro de 2026". */
+/** Formata "AAAA-MM" como "Set/2026" — formato padrão do app pra qualquer texto que mostre um mês por extenso. */
 function formatMonthKey(mesRefKey) {
   const [ano, mes] = mesRefKey.split('-').map(Number);
-  return `${MES_NOMES[mes - 1]} de ${ano}`;
+  return `${MES_ABREV[mes - 1]}/${ano}`;
 }
 
 function formatBRL(valor) {

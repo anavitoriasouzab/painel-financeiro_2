@@ -328,28 +328,29 @@ const SimpleCharts = {
     const zeroY = yFor(0).toFixed(1);
     const zeroLine = min < 0 && max > 0 ? `<line x1="${padL}" y1="${zeroY}" x2="${w - padR}" y2="${zeroY}" stroke="var(--border)" stroke-width="1" stroke-dasharray="3 3"/>` : '';
 
-    const xLabels = labels.map((l, i) => `<span style="left:${((xFor(i) / w) * 100).toFixed(1)}%">${escapeHtml(l)}</span>`).join('');
+    // Perto de qualquer uma das bordas, centralizar um rótulo no ponto
+    // (transform: translateX(-50%)) faz metade dele vazar pra fora do card —
+    // isso sempre acontecia no rótulo do último ponto/mês (ele é sempre o
+    // mais à direita). Ancora pela esquerda/direita nesses casos, só
+    // centraliza de verdade quando o ponto está numa faixa segura no meio.
+    // Usado tanto pelos rótulos do eixo X quanto pelos rótulos/anotações de
+    // valor sobrepostos ao gráfico (mesmo problema, mesma solução).
+    const hAnchor = (xPct) => {
+      if (xPct > 85) return { pos: `right:${(100 - xPct).toFixed(1)}%;`, tx: '0%' };
+      if (xPct < 15) return { pos: `left:${xPct.toFixed(1)}%;`, tx: '0%' };
+      return { pos: `left:${xPct.toFixed(1)}%;`, tx: '-50%' };
+    };
+
+    const xLabels = labels.map((l, i) => {
+      const { pos, tx } = hAnchor((xFor(i) / w) * 100);
+      return `<span style="${pos}transform:translateX(${tx})">${escapeHtml(l)}</span>`;
+    }).join('');
 
     const legend = series.length > 1 ? `
       <div class="sc-legend sc-legend-inline">
         ${series.map((s, i) => `<div class="sc-legend-item"><span class="sc-dot" style="background:${s.color || this.colorFor(i)}"></span>${escapeHtml(s.name)}</div>`).join('')}
       </div>
     ` : '';
-
-    // Rótulos de valor acima de cada ponto (ou só do último, pra não poluir
-    // um gráfico compacto) e "selos" de anotação em marcos específicos —
-    // posicionados como HTML por cima do SVG (não como <text> dentro do
-    // viewBox, que distorceria com preserveAspectRatio="none"). Perto de
-    // qualquer uma das bordas, centralizar o rótulo no ponto (transform:
-    // translateX(-50%)) faz metade dele vazar pra fora do card — isso
-    // sempre acontecia no rótulo do último ponto (ele é sempre o mais à
-    // direita). Ancora pela esquerda/direita nesses casos, só centraliza
-    // de verdade quando o ponto está numa faixa segura no meio.
-    const hAnchor = (xPct) => {
-      if (xPct > 85) return { pos: `right:${(100 - xPct).toFixed(1)}%;`, tx: '0%' };
-      if (xPct < 15) return { pos: `left:${xPct.toFixed(1)}%;`, tx: '0%' };
-      return { pos: `left:${xPct.toFixed(1)}%;`, tx: '-50%' };
-    };
 
     let overlay = '';
     const labelSeriesIndex = opts.labelSeriesIndex || 0;

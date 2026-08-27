@@ -312,7 +312,7 @@
           <div class="field"><label for="sim-periodo">Período do gráfico (meses)</label><input id="sim-periodo" type="number" min="1" step="1" placeholder="12" /></div>
           <button class="secondary-btn" style="width:100%;" onclick="Simulator.run()">Simular</button>
           <div id="sim-results" style="margin-top:10px;"></div>
-          <div class="chart-card-sm" style="margin-top:12px;"><div id="chart-sim-evolucao" class="sc-container"></div></div>
+          <div id="sim-chart-wrap" class="chart-card-sm" style="margin-top:12px;display:none;"><div id="chart-sim-evolucao" class="sc-container"></div></div>
           <p class="muted-text" style="margin-top:8px;">Sem taxa informada, é só a soma dos aportes — nenhuma rentabilidade é assumida.</p>
         </div>
 
@@ -423,6 +423,7 @@
           <button class="secondary-btn" style="width:100%;margin-bottom:8px;" onclick="Backup.exportCSV()">Exportar despesas (CSV)</button>
           <button class="secondary-btn" style="width:100%;margin-bottom:8px;" onclick="Backup.triggerImport()">Importar backup (JSON)</button>
           <input type="file" id="backup-import-input" accept="application/json" style="display:none;" onchange="Backup.handleImport(this)" />
+          <button class="secondary-btn" style="width:100%;margin-bottom:8px;" onclick="Report.open(appData)">Exportar relatório mensal</button>
           <button class="mini-btn danger" style="width:100%;justify-content:center;" onclick="Backup.deleteAllData()">Excluir todos os dados</button>
         </div>
 
@@ -795,6 +796,22 @@
   </div>
 </div>
 
+<!-- Overlay: relatório financeiro mensal (tela + impressão/PDF via window.print()) -->
+<div class="modal-overlay" id="report-overlay" role="dialog" aria-modal="true" aria-label="Relatório financeiro mensal">
+  <div class="modal-sheet report-modal-sheet">
+    <div class="report-toolbar">
+      <h3>Relatório mensal</h3>
+      <div class="report-toolbar-actions">
+        <button class="secondary-btn" onclick="window.print()"><span class="material-symbols-outlined" aria-hidden="true" style="vertical-align:-4px;margin-right:4px;">print</span>Exportar / Imprimir PDF</button>
+        <button class="icon-btn" id="report-close-btn" aria-label="Fechar relatório"><svg viewBox="0 -960 960 960" width="16" height="16" fill="currentColor"><path d="m249-207-42-42 231-231-231-231 42-42 231 231 231-231 42 42-231 231 231 231-42 42-231-231-231 231Z"/></svg></button>
+      </div>
+    </div>
+    <div class="report-scroll">
+      <div id="report-sheet" class="report-sheet" data-theme="light"></div>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
@@ -810,6 +827,7 @@
 <script src="js/planning.js"></script>
 <script src="js/goals.js"></script>
 <script src="js/backup.js"></script>
+<script src="js/report.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

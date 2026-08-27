@@ -37,6 +37,7 @@ async function initApp(session) {
   setupAccountSection(session);
   setupToggleGroupAria();
   setupModalAccessibility();
+  setupReportModal();
 }
 
 /**
@@ -247,6 +248,11 @@ function setupExpenseModal() {
   document.getElementById('receipt-close-btn').addEventListener('click', () => {
     document.getElementById('receipt-overlay').classList.remove('active');
   });
+}
+
+function setupReportModal() {
+  const closeBtn = document.getElementById('report-close-btn');
+  if (closeBtn) closeBtn.addEventListener('click', () => Report.close());
 }
 
 function setupInstallmentModal() {

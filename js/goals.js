@@ -39,8 +39,8 @@ const Goals = {
         <div class="goal-card-header">
           <div class="goal-name">${escapeHtml(m.nome)}</div>
           <div class="goal-actions">
-            <button class="mini-btn" data-action="edit">Editar</button>
-            <button class="mini-btn danger" data-action="delete">Excluir</button>
+            <button class="mini-btn icon-btn" data-action="edit" title="Editar" aria-label="Editar meta"><span class="material-symbols-outlined" aria-hidden="true">edit</span></button>
+            <button class="mini-btn icon-btn danger" data-action="delete" title="Excluir" aria-label="Excluir meta"><span class="material-symbols-outlined" aria-hidden="true">delete</span></button>
           </div>
         </div>
         <div class="progress-track"><div class="progress-fill" style="width:${prog.percent}%"></div></div>
@@ -62,8 +62,8 @@ const Goals = {
         <div class="goal-card-header">
           <div class="goal-name">${escapeHtml(m.nome)}</div>
           <div class="goal-actions">
-            <button class="mini-btn" data-action="edit">Editar</button>
-            <button class="mini-btn danger" data-action="delete">Excluir</button>
+            <button class="mini-btn icon-btn" data-action="edit" title="Editar" aria-label="Editar meta"><span class="material-symbols-outlined" aria-hidden="true">edit</span></button>
+            <button class="mini-btn icon-btn danger" data-action="delete" title="Excluir" aria-label="Excluir meta"><span class="material-symbols-outlined" aria-hidden="true">delete</span></button>
           </div>
         </div>
         <div class="goal-progress-meta"><span>Meta de hábito mensal: guardar ${formatBRL(m.valorMensalDesejado)}/mês</span></div>
@@ -197,6 +197,9 @@ const Simulator = {
     const taxaMensal = Number.isNaN(taxaPercent) ? 0 : taxaPercent / 100;
 
     if (Number.isNaN(valor) || valor <= 0) { alert('Informe um valor mensal válido para simular.'); return; }
+
+    const chartWrap = document.getElementById('sim-chart-wrap');
+    if (chartWrap) chartWrap.style.display = 'block';
 
     const resultados = Calc.simulateInvestment(valor, [6, 12, 24, 60], taxaMensal);
     const wrap = document.getElementById('sim-results');

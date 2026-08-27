@@ -76,8 +76,15 @@ const Accounts = {
       if (!data.despesasRecorrentes.length) return this._renderEmpty(list, 'Nenhuma despesa recorrente cadastrada ainda.');
       data.despesasRecorrentes.forEach((d) => list.appendChild(this._buildRecorrenteCard(d)));
     } else if (this.currentTab === 'variaveis') {
-      if (!data.despesasVariaveis.length) return this._renderEmpty(list, 'Nenhuma despesa variável cadastrada ainda.');
-      data.despesasVariaveis.forEach((d) => list.appendChild(this._buildVariavelCard(d)));
+      // Só o mês atual — sem isso, despesas variáveis de meses já virados
+      // (que não têm "parcela" pra justificar aparecer em mais de um mês)
+      // continuavam listadas junto com as do mês corrente, dando a
+      // impressão de repetição/duplicação a cada virada de mês. Histórico
+      // de meses anteriores continua disponível em Análises.
+      const mes = data.meta.mesReferenciaAtual;
+      const doMes = data.despesasVariaveis.filter((d) => d.mesReferencia === mes);
+      if (!doMes.length) return this._renderEmpty(list, 'Nenhuma despesa variável cadastrada neste mês ainda.');
+      doMes.forEach((d) => list.appendChild(this._buildVariavelCard(d)));
     }
     // A aba "parcelamentos" é renderizada por Installments.render() — ver app.js.
   },
@@ -96,14 +103,14 @@ const Accounts = {
       <div class="account-main">
         <div class="account-name">${escapeHtml(d.nome)}</div>
         <div class="account-meta">${escapeHtml(d.categoria || 'Sem categoria')} · vencimento ${escapeHtml(d.vencimento || 'não informado')}</div>
+        ${statusBadge(d.status)}
       </div>
       <div class="account-side">
         <div class="account-value">${formatBRL(d.valor)}</div>
-        ${statusBadge(d.status)}
-      </div>
-      <div class="account-actions">
-        <button class="mini-btn" data-action="edit">Editar</button>
-        <button class="mini-btn danger" data-action="delete">Excluir</button>
+        <div class="account-side-row">
+          <button class="mini-btn icon-btn" data-action="edit" title="Editar" aria-label="Editar despesa"><span class="material-symbols-outlined" aria-hidden="true">edit</span></button>
+          <button class="mini-btn icon-btn danger" data-action="delete" title="Excluir" aria-label="Excluir despesa"><span class="material-symbols-outlined" aria-hidden="true">delete</span></button>
+        </div>
       </div>
     `;
     el.querySelector('[data-action="edit"]').addEventListener('click', () => this.openForm('recorrente', d.id));
@@ -117,15 +124,15 @@ const Accounts = {
     el.innerHTML = `
       <div class="account-main">
         <div class="account-name">${escapeHtml(d.nome)}</div>
-        <div class="account-meta">${escapeHtml(d.categoria || 'Sem categoria')} · ${formatMesReferencia(d.mesReferencia)}</div>
+        <div class="account-meta">${escapeHtml(d.categoria || 'Sem categoria')} · ${formatMonthKey(d.mesReferencia)}</div>
+        ${statusBadge(d.status)}
       </div>
       <div class="account-side">
         <div class="account-value">${formatBRL(d.valor)}</div>
-        ${statusBadge(d.status)}
-      </div>
-      <div class="account-actions">
-        <button class="mini-btn" data-action="edit">Editar</button>
-        <button class="mini-btn danger" data-action="delete">Excluir</button>
+        <div class="account-side-row">
+          <button class="mini-btn icon-btn" data-action="edit" title="Editar" aria-label="Editar despesa"><span class="material-symbols-outlined" aria-hidden="true">edit</span></button>
+          <button class="mini-btn icon-btn danger" data-action="delete" title="Excluir" aria-label="Excluir despesa"><span class="material-symbols-outlined" aria-hidden="true">delete</span></button>
+        </div>
       </div>
     `;
     if (d.comprovante) {
@@ -265,6 +272,21 @@ const Accounts = {
 
   async submitForm(evt) {
     evt.preventDefault();
+    // Trava contra duplo clique/duplo toque — mesmo motivo do
+    // Installments.submitForm: sem isso, uma segunda chamada antes da
+    // primeira terminar (confirmCommitmentImpact pode resolver na hora,
+    // sem diálogo, quando não há limite configurado) criava duas despesas
+    // idênticas.
+    if (this._submitting) return;
+    this._submitting = true;
+    try {
+      await this._doSubmitForm();
+    } finally {
+      this._submitting = false;
+    }
+  },
+
+  async _doSubmitForm() {
     const tipo = document.getElementById('expense-type').value;
     const nome = document.getElementById('expense-nome').value.trim();
     const valor = parseFloat(document.getElementById('expense-valor').value);
@@ -341,9 +363,22 @@ const Accounts = {
  * ação, `false` se foi cancelada. `danger: true` deixa o botão de confirmar
  * vermelho, pra sinalizar visualmente uma ação que não pode ser desfeita.
  */
+/**
+ * Fila de confirmDialog — todos usam o mesmo #confirm-modal do DOM. Sem
+ * isso, um duplo clique/duplo toque num botão de salvar (formulário de
+ * parcelamento, despesa, etc.) disparava confirmCommitmentImpact() duas
+ * vezes antes da primeira resolver: as DUAS chamadas registravam seu
+ * próprio par de listeners nos MESMOS botões compartilhados, e um único
+ * clique em "Continuar" disparava os dois — deixando as duas submissões
+ * concorrentes prosseguirem e criarem dois registros idênticos (esse era o
+ * motivo de contas/parcelamentos aparecerem duplicados no relatório).
+ * Encadear por uma promise garante no máximo uma confirmação por vez.
+ */
+let _confirmDialogQueue = Promise.resolve();
+
 function confirmDialog(message, opts = {}) {
-  const { title = 'Atenção', showCancel = true, confirmLabel = 'Continuar', cancelLabel = 'Cancelar', danger = false } = opts;
-  return new Promise((resolve) => {
+  const run = () => new Promise((resolve) => {
+    const { title = 'Atenção', showCancel = true, confirmLabel = 'Continuar', cancelLabel = 'Cancelar', danger = false } = opts;
     const modal = document.getElementById('confirm-modal');
     document.getElementById('confirm-modal-title').textContent = title;
     document.getElementById('confirm-modal-message').textContent = message;
@@ -366,6 +401,11 @@ function confirmDialog(message, opts = {}) {
     cancelBtn.addEventListener('click', onCancel);
     modal.classList.add('active');
   });
+
+  const result = _confirmDialogQueue.then(run);
+  // Erros/rejeições de uma chamada não podem travar a fila pras próximas.
+  _confirmDialogQueue = result.catch(() => {});
+  return result;
 }
 
 /**

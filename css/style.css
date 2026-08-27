@@ -92,6 +92,38 @@
   --sidebar-border: #1E2236;
 }
 
+/* Réplica explícita da paleta clara (idêntica ao bloco padrão em :root),
+   mas como regra de atributo em vez de pseudo-classe — :root só bate com
+   o <html>, então isso é o que permite forçar "sempre claro" num elemento
+   qualquer (ex.: #report-overlay), não importa o tema escolhido no resto
+   do app. Sem duplicar isso aqui, um data-theme="light" num elemento
+   aninhado não teria nenhum efeito. */
+[data-theme="light"] {
+  --bg: #F3F0FA;
+  --surface: #FDFBFE;
+  --surface-soft: #ECE6F8;
+  --border: #D5C8EA;
+
+  --purple-text: var(--purple-700);
+  --purple-soft: var(--purple-100);
+
+  --text-primary: #201A33;
+  --text-secondary: #6B6480;
+  --text-muted: #78708C;
+
+  --success: #187E56;
+  --success-bg: #E4F7EF;
+  --warning: #966319;
+  --warning-bg: #FBF0DD;
+  --danger: #C0392B;
+  --danger-bg: #FBE7E4;
+
+  --shadow-card: 0 1px 2px rgba(44, 27, 87, 0.04), 0 8px 24px -12px rgba(76, 46, 158, 0.18);
+
+  --sidebar-bg: #F4F0FC;
+  --sidebar-border: #E3DBF7;
+}
+
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
 
@@ -839,9 +871,24 @@ section.view.active { display: block; animation: view-fade-in 0.25s ease; }
 }
 
 .account-name { font-weight: 600; font-size: 14px; }
-.account-meta { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+.account-meta { font-size: 12px; color: var(--text-secondary); margin-top: 5px; margin-bottom: 5px; }
+/* Só no desktop: o respiro de 5px antes do badge de status (definido pro
+   mobile) fica exagerado num card bem mais largo — reduz só aqui, sem
+   mexer no valor mobile. Precisa vir DEPOIS da regra base acima (mesma
+   especificidade — em empate, quem vem depois no arquivo é que vale). */
+@media (min-width: 860px) {
+  .account-meta { margin-bottom: 2px; }
+}
 .account-value { font-family: var(--font-display); font-weight: 700; color: var(--purple-text); text-align: right; }
 .account-value .unit { font-size: 11px; font-weight: 500; color: var(--text-muted); }
+/* Cartão de despesa (Contas): o badge de status vem depois do nome/meta,
+   dentro de .account-main (à esquerda). Precisa de display:block porque
+   margin-top não tem efeito em elemento inline (.badge é um <span>) — sem
+   isso o valor era só ignorado. .account-main também vira flex-column pra
+   as margens de .account-meta/.badge não colapsarem entre si (margens de
+   blocos vizinhos colapsam pro maior valor por padrão; em flex, somam). */
+.account-main { display: flex; flex-direction: column; }
+.account-main .badge { display: block; width: fit-content; margin-top: 6px; }
 
 /* Despesas recentes (Dashboard) — linha em pílula com ícone de categoria,
    só pra esse card (ver Dashboard._renderRecentExpenses); o resto do app
@@ -854,7 +901,10 @@ section.view.active { display: block; animation: view-fade-in 0.25s ease; }
   border: 1px solid var(--border);
   border-radius: 999px;
   padding: 8px 16px 8px 8px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
+.tx-row:hover, .tx-row:focus-visible { background: var(--surface-soft); border-color: var(--purple-300); }
 .tx-icon {
   width: 40px; height: 40px;
   border-radius: 50%;
@@ -868,6 +918,20 @@ section.view.active { display: block; animation: view-fade-in 0.25s ease; }
 .tx-value { font-family: var(--font-display); font-weight: 700; font-size: 13.5px; color: var(--purple-text); white-space: nowrap; }
 
 .account-side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+
+/* Cartão de despesa (Contas): valor em cima, ícones de Editar/Excluir
+   embaixo — dentro de .account-side, então herdam o alinhamento à direita
+   do valor sem precisar repetir. Sem a linha de rodapé inteira que existia
+   só pra "Editar"/"Excluir" (.account-actions), o card fica mais baixo e a
+   lista mais limpa. */
+.account-side-row { display: flex; align-items: center; gap: 6px; }
+
+/* Cartão de cartão-de-crédito: só tem texto (sem valor/badge) do lado
+   esquerdo, então os ícones de ação vão soltos na coluna direita do grid,
+   centralizados verticalmente contra o bloco de texto — aproveita o
+   espaço vazio que sobrava ali em vez de um rodapé (.account-actions)
+   só pra eles. */
+.account-icon-col { display: flex; align-items: center; gap: 6px; align-self: center; }
 
 .account-actions {
   grid-column: 1 / -1;
@@ -891,6 +955,21 @@ section.view.active { display: block; animation: view-fade-in 0.25s ease; }
   cursor: pointer;
 }
 .mini-btn.danger { color: var(--danger); }
+
+/* Editar/Excluir como ícone em vez de texto (cards de despesa), lado a
+   lado com o badge de status — 28px ainda fica acima do mínimo de 24x24
+   do WCAG 2.2 (Target Size), só um pouco mais compacto que o .mini-btn
+   de texto pra combinar com a altura do badge ao lado. */
+.mini-btn.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  min-height: 0;
+  padding: 0;
+}
+.mini-btn.icon-btn .material-symbols-outlined { font-size: 16px; }
 
 .badge {
   font-size: 11px;
@@ -1013,10 +1092,34 @@ section.view.active { display: block; animation: view-fade-in 0.25s ease; }
 .receipt-sheet img { max-width: 100%; max-height: 70vh; border-radius: 12px; }
 .receipt-sheet .icon-btn { position: absolute; top: 10px; right: 10px; background: var(--surface); }
 
-.ending-list { display: flex; flex-direction: column; gap: 10px; }
-.ending-row { display: flex; flex-direction: column; gap: 2px; }
-.ending-row .name { font-size: 13.5px; font-weight: 600; color: var(--text-primary); }
-.ending-row .detail { font-size: 12px; color: var(--text-secondary); }
+/* "Contas que acabam em breve" — o valor liberado é o protagonista do
+   card verde, bem maior que o resto do texto ao lado. */
+.ending-highlight { align-items: center; margin-bottom: 12px; }
+.ending-highlight .material-symbols-outlined { font-size: 24px; }
+.ending-highlight-label { font-size: 12px; opacity: 0.85; }
+.ending-highlight-value { font-family: var(--font-display); font-size: 14px; font-weight: 700; line-height: 1.3; }
+
+.ending-month-group { margin-bottom: 14px; }
+.ending-month-group:last-child { margin-bottom: 0; }
+.ending-month-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 4px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.ending-month-name { font-size: 12.5px; font-weight: 700; color: var(--text-primary); text-transform: capitalize; }
+.ending-month-total { font-size: 11.5px; color: var(--text-muted); white-space: nowrap; }
+
+/* Lista compacta pra escanear rápido: nome à esquerda, valor mensal em
+   destaque à direita — sem a linha "termina em X" repetida por item, já
+   coberta pelo cabeçalho do grupo do mês. */
+.ending-list { display: flex; flex-direction: column; gap: 2px; }
+.ending-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 5px 0; }
+.ending-row .name { font-size: 13px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ending-row .value { font-family: var(--font-display); font-size: 13.5px; font-weight: 700; color: var(--purple-text); white-space: nowrap; }
 .muted-text { font-size: 13px; color: var(--text-muted); margin: 0; }
 
 /* ------------------------------ Análises (Fase 4) ------------------------ */
@@ -1371,3 +1474,148 @@ section.view.active { display: block; animation: view-fade-in 0.25s ease; }
   z-index: 60;
 }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* -------------------------------------------------------------------------
+   RELATÓRIO MENSAL (Perfil > Relatórios) — tela + impressão/PDF
+   O overlay reaproveita .modal-overlay (mesmo comportamento de Esc/focus
+   trap de qualquer modal do app, via setupModalAccessibility em app.js);
+   só a "folha" do relatório em si (.report-sheet) é nova, e sempre força a
+   paleta clara via variáveis próprias — um documento pra imprimir não deve
+   mudar com o tema escuro do app.
+--------------------------------------------------------------------------*/
+.report-modal-sheet {
+  max-width: 900px;
+  width: 95%;
+  height: 92vh;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.report-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.report-toolbar h3 { font-family: var(--font-display); font-size: 16px; }
+.report-toolbar-actions { display: flex; align-items: center; gap: 8px; }
+.report-toolbar-actions .secondary-btn { padding: 9px 14px; font-size: 13px; }
+
+/* display:flex aqui (só pra centralizar .report-sheet) é o que causava o
+   bug: um item flex dentro de um container flex com overflow:auto tem seu
+   min-height automático resolvido pra 0 em vez de acompanhar o conteúdo
+   (regra do próprio spec de flexbox), então .report-sheet ficava espremido
+   na altura do container em vez de crescer com o relatório inteiro — o
+   texto que passava disso ainda aparecia (overflow:visible no item), só
+   que sem o fundo claro por trás, caindo por cima do fundo escuro do
+   modal. Centralizar com margin:auto num bloco comum não tem esse problema. */
+.report-scroll { flex: 1; overflow-y: auto; padding: 24px; }
+
+/* Cores fixas (não variáveis de tema) — o relatório é um documento pra
+   imprimir/exportar, então NUNCA deve mudar com o tema escuro/claro do
+   app. data-theme="light" no #report-sheet (ver [data-theme="light"] no
+   topo do arquivo) já cobria isso, mas depender de custom properties que
+   também existem com outro valor em [data-theme="dark"] se mostrou frágil
+   na prática — cor fixa em hexadecimal aqui elimina qualquer dependência
+   do tema herdado do restante da página. */
+.report-sheet {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  background: #FDFBFE;
+  color: #201A33;
+  font-family: var(--font-body);
+  padding: 36px 40px;
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(44, 27, 87, 0.04), 0 8px 24px -12px rgba(76, 46, 158, 0.18);
+}
+
+.report-brand {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 16px;
+  margin-bottom: 20px;
+  border-bottom: 2px solid #5F3DC4;
+}
+.report-brand-title { font-family: var(--font-display); font-weight: 700; font-size: 22px; color: #4B2E9E; }
+.report-brand-sub { font-size: 12.5px; color: #6B6480; margin-top: 2px; }
+.report-brand-logo { display: flex; align-items: center; gap: 8px; color: #5F3DC4; font-family: var(--font-display); font-weight: 700; font-size: 14px; }
+
+.report-section { margin-bottom: 26px; break-inside: avoid; }
+.report-section-title {
+  font-family: var(--font-display);
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #4B2E9E;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #D5C8EA;
+}
+
+.report-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.report-card { background: #ECE6F8; border-radius: 10px; padding: 10px 12px; }
+.report-card-label { font-size: 10.5px; color: #6B6480; }
+.report-card-value { font-family: var(--font-display); font-weight: 700; font-size: 16px; margin-top: 2px; color: #201A33; }
+
+.report-chart-block { background: #ECE6F8; border-radius: 10px; padding: 12px; }
+
+.report-table { width: 100%; border-collapse: collapse; font-size: 12px; color: #201A33; }
+.report-table th, .report-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #D5C8EA; }
+.report-table th { color: #6B6480; font-weight: 600; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.02em; }
+.report-table td.num, .report-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+.report-empty { font-size: 12.5px; color: #78708C; padding: 6px 0; }
+
+/* Insights (08): grade 2x2, uma cor de borda por quadrante — mesmo
+   agrupamento "Melhorou / Piorou / Atenção / Oportunidades" da referência. */
+.report-insights-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.report-insight-box { background: #ECE6F8; border-left: 3px solid; border-radius: 8px; padding: 10px 12px; }
+.report-insight-title { font-weight: 700; font-size: 12px; margin-bottom: 6px; display: flex; align-items: center; gap: 4px; }
+.report-insight-title .material-symbols-outlined { font-size: 15px; }
+.report-insight-box ul { margin: 0; padding-left: 16px; font-size: 11.5px; color: #201A33; line-height: 1.5; }
+.report-insight-box li { margin-bottom: 3px; }
+.report-insight-empty { font-size: 11px; color: #78708C; margin: 0; }
+@media (max-width: 640px) {
+  .report-insights-grid { grid-template-columns: 1fr; }
+}
+
+.report-footer { margin-top: 8px; padding-top: 12px; border-top: 1px solid #D5C8EA; font-size: 10.5px; color: #78708C; text-align: center; }
+
+@media (max-width: 640px) {
+  .report-cards { grid-template-columns: repeat(2, 1fr); }
+  .report-sheet { padding: 24px 18px; }
+}
+
+/* Impressão: isola só a folha do relatório na página, sem a barra de
+   ferramentas nem o resto do app por trás — o mesmo truque de "imprimir só
+   este elemento" (visibility em vez de display, pra não precisar prever a
+   profundidade do DOM). */
+@media print {
+  body * { visibility: hidden; }
+  #report-overlay, #report-overlay * { visibility: visible; }
+  #report-overlay {
+    position: absolute;
+    inset: 0;
+    background: none;
+    display: block;
+  }
+  #report-overlay .report-toolbar { display: none; }
+  #report-overlay .report-modal-sheet {
+    position: static;
+    width: 100%;
+    height: auto;
+    max-width: 100%;
+    box-shadow: none;
+    border-radius: 0;
+  }
+  #report-overlay .report-scroll { overflow: visible; height: auto; padding: 0; display: block; }
+  #report-overlay .report-sheet { max-width: 100%; box-shadow: none; border-radius: 0; }
+}

@@ -298,6 +298,54 @@ const empty = baseData();
 ].forEach(([label, fn]) => assertNoThrow(fn, `usuário novo (tudo vazio): ${label} não lança exceção`));
 
 // ---------------------------------------------------------------------
+// Despesa recorrente com início futuro (inicioMesReferencia) não deve
+// "vazar" pro mês corrente em nenhum lugar que trata despesasRecorrentes
+// como "contas deste mês" — bug relatado: conta de novembro contando (e
+// gerando lembrete) já em setembro.
+// ---------------------------------------------------------------------
+const recorrenteFutura = {
+  id: 'rec-futura', nome: 'Assinatura nova', valor: 100, categoria: 'Assinaturas',
+  status: 'Pendente', vencimento: '10', inicioMesReferencia: '2026-11',
+};
+const dataComRecorrenteFutura = baseData({ despesasRecorrentes: [recorrenteFutura] });
+
+assertEqual(
+  Calc.calculateFixedExpenses(dataComRecorrenteFutura, '2026-09'),
+  0,
+  'calculateFixedExpenses: recorrente com início em novembro não conta em setembro'
+);
+assertEqual(
+  Calc.calculateFixedExpenses(dataComRecorrenteFutura, '2026-11'),
+  100,
+  'calculateFixedExpenses: recorrente com início em novembro passa a contar a partir de novembro'
+);
+assertEqual(
+  Calc.calculateReminders(dataComRecorrenteFutura).some((r) => r.id === 'rec-rec-futura'),
+  false,
+  'calculateReminders: não gera lembrete de conta pendente antes do inicioMesReferencia'
+);
+assertEqual(
+  Calc.calculateReminders(baseData({ despesasRecorrentes: [recorrenteFutura], meta: { mesReferenciaAtual: '2026-11' } })).some((r) => r.id === 'rec-rec-futura'),
+  true,
+  'calculateReminders: volta a gerar o lembrete a partir do mês de início'
+);
+assertEqual(
+  Calc.calculateTopExpenses(dataComRecorrenteFutura, '2026-09').some((i) => i.nome === 'Assinatura nova'),
+  false,
+  'calculateTopExpenses: recorrente futura não aparece nas maiores despesas do mês atual'
+);
+assertEqual(
+  Calc.calculateCategoryBreakdown(dataComRecorrenteFutura, '2026-09').some((c) => c.categoria === 'Assinaturas'),
+  false,
+  'calculateCategoryBreakdown: recorrente futura não soma na categoria do mês atual'
+);
+assertEqual(
+  Calc.calculateDailySpendingCurve(dataComRecorrenteFutura, '2026-09').hasData,
+  false,
+  'calculateDailySpendingCurve: recorrente futura não aparece na curva de gastos do mês atual'
+);
+
+// ---------------------------------------------------------------------
 // Resultado
 // ---------------------------------------------------------------------
 console.log(`\n${passed} passaram, ${failed} falharam.`);

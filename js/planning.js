@@ -84,8 +84,13 @@ const Planning = {
     }
 
     // 2) Avança parcelamentos: decrementa parcelasRestantes/incrementa parcelaAtual,
-    //    remove os que já cobraram sua última parcela neste mês.
-    appData.parcelamentos = appData.parcelamentos
+    //    remove os que já cobraram sua última parcela neste mês. Isso já
+    //    acontecia antes, só que em silêncio — sem nenhuma confirmação na
+    //    tela, dava a impressão de que a conta continuava "pendente" pra
+    //    sempre, e levava a cadastrar de novo por engano (ver toast no fim
+    //    da função, que agora avisa quais foram concluídos aqui).
+    const parcelamentosAntes = appData.parcelamentos;
+    appData.parcelamentos = parcelamentosAntes
       .map((p) => {
         const restantes = p.parcelasRestantes == null ? null : p.parcelasRestantes - 1;
         const atual = p.parcelaAtual == null ? null : p.parcelaAtual + 1;
@@ -95,6 +100,9 @@ const Planning = {
       // à mão (o formulário já impede isso na origem) — nesse caso mantém o
       // parcelamento em vez de apagar silenciosamente um dado que não dá pra confirmar.
       .filter((p) => p.parcelasRestantes == null || Number.isNaN(p.parcelasRestantes) || p.parcelasRestantes >= 0);
+    const parcelamentosConcluidos = parcelamentosAntes.filter(
+      (p) => !appData.parcelamentos.some((np) => np.id === p.id)
+    );
 
     // 3) Contas recorrentes voltam a ficar pendentes no novo mês.
     appData.despesasRecorrentes.forEach((d) => { d.status = 'Pendente'; });
@@ -107,6 +115,14 @@ const Planning = {
     Dashboard.render(appData);
     Accounts.render(appData);
     Planning.render(appData);
-    toast(`Boas-vindas a ${formatMonthKey(proximo)}!`);
+
+    const boasVindas = `Boas-vindas a ${formatMonthKey(proximo)}!`;
+    if (parcelamentosConcluidos.length === 1) {
+      toast(`${boasVindas} Parcelamento "${parcelamentosConcluidos[0].nome}" foi concluído e removido.`);
+    } else if (parcelamentosConcluidos.length > 1) {
+      toast(`${boasVindas} ${parcelamentosConcluidos.length} parcelamentos concluídos e removidos: ${parcelamentosConcluidos.map((p) => p.nome).join(', ')}.`);
+    } else {
+      toast(boasVindas);
+    }
   },
 };
