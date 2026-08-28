@@ -115,12 +115,17 @@ const Installments = {
     toast(this.editingCardId ? 'Cartão atualizado.' : 'Cartão adicionado.');
   },
 
-  /** Exclui um cartão — parcelamentos vinculados a ele ficam sem cartão (igual ao "on delete set null" do banco). */
+  /** Exclui um cartão — parcelamentos e despesas vinculados a ele ficam sem cartão (igual ao "on delete set null" do banco). */
   async deleteCard(id) {
     if (!await confirmDialog('Excluir este cartão? Essa ação não pode ser desfeita.', { title: 'Excluir cartão', confirmLabel: 'Excluir', danger: true })) return;
-    const emUso = appData.parcelamentos.filter((p) => p.cartaoId === id);
-    if (emUso.length && !await confirmDialog(`Este cartão tem ${emUso.length} parcelamento(s) vinculado(s), que ficará(ão) sem cartão associado. Continuar?`, { title: 'Cartão em uso', confirmLabel: 'Continuar', danger: true })) return;
-    emUso.forEach((p) => { p.cartaoId = null; });
+    const parcelamentosEmUso = appData.parcelamentos.filter((p) => p.cartaoId === id);
+    const recorrentesEmUso = appData.despesasRecorrentes.filter((d) => d.cartaoId === id);
+    const variaveisEmUso = appData.despesasVariaveis.filter((d) => d.cartaoId === id);
+    const totalEmUso = parcelamentosEmUso.length + recorrentesEmUso.length + variaveisEmUso.length;
+    if (totalEmUso && !await confirmDialog(`Este cartão tem ${totalEmUso} lançamento(s) vinculado(s) (parcelamentos e/ou despesas), que ficará(ão) sem cartão associado. Continuar?`, { title: 'Cartão em uso', confirmLabel: 'Continuar', danger: true })) return;
+    parcelamentosEmUso.forEach((p) => { p.cartaoId = null; });
+    recorrentesEmUso.forEach((d) => { d.cartaoId = null; });
+    variaveisEmUso.forEach((d) => { d.cartaoId = null; });
     appData.cartoes = appData.cartoes.filter((c) => c.id !== id);
     Storage.save(appData);
     this.render(appData);

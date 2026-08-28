@@ -167,8 +167,15 @@ const Profile = {
         setAvatarPlaceholderContent(placeholder, data.perfil.nome);
       }
     }
+
+    const removeBtn = document.getElementById('profile-photo-remove-btn');
+    if (removeBtn) removeBtn.style.display = data.perfil.foto ? 'inline-flex' : 'none';
   },
 
+  /** Resumo minimalista (nome + um número só) — mesmo padrão de chip já
+      usado nas metas em destaque do Dashboard (ver Dashboard._renderGoalsSummary
+      e .dash-mini-chip); edição completa (valor guardado, prazo, observação)
+      continua na tela de Metas, esta aqui é só um relance rápido. */
   _renderGoalsSummary(data) {
     const wrap = document.getElementById('profile-goals-summary');
     if (!wrap) return;
@@ -176,17 +183,24 @@ const Profile = {
       wrap.innerHTML = '<p class="muted-text">Nenhuma meta cadastrada ainda.</p>';
       return;
     }
-    wrap.innerHTML = data.metas.map((m) => `
-      <div class="goal-row">
-        <div class="goal-name">${escapeHtml(m.nome)}</div>
-        <div class="goal-detail">
-          ${m.valorMensalDesejado != null ? `Meta mensal: ${formatBRL(m.valorMensalDesejado)}` : ''}
-          ${m.valorDesejado != null ? `Valor desejado: ${formatBRL(m.valorDesejado)}` : ''}
-          ${m.valorAtual != null ? ` · Guardado: ${formatBRL(m.valorAtual)}` : ''}
+    wrap.innerHTML = data.metas.map((m) => {
+      const prog = Calc.calculateGoalProgress(m);
+      const detalhe = prog ? formatPercent(prog.percent) : (m.valorMensalDesejado != null ? `${formatBRL(m.valorMensalDesejado)}/mês` : '');
+      return `
+        <div class="dash-mini-chip dash-mini-chip-link" role="button" tabindex="0" onclick="Profile.goToGoals()" onkeydown="if(event.key==='Enter')Profile.goToGoals()">
+          <span class="material-symbols-outlined" aria-hidden="true">track_changes</span> <span style="flex:1;">${escapeHtml(m.nome)}</span><strong>${detalhe}</strong>
         </div>
-        ${m.observacao ? `<div class="goal-obs">${escapeHtml(m.observacao)}</div>` : ''}
-      </div>
-    `).join('');
+      `;
+    }).join('');
+  },
+
+  /** Clicar numa meta do resumo leva pra tela de Planejamento, onde a lista
+      completa de metas vive de verdade (criar/editar/excluir) — este resumo
+      aqui é só leitura. */
+  goToGoals() {
+    navigateTo('planejamento');
+    const anchor = document.getElementById('planejamento-goals-anchor');
+    if (anchor) anchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
   },
 
   handlePhotoChange(input) {
@@ -273,7 +287,7 @@ const Income = {
     const isExtra = r.frequencia === 'unica';
     const meta = isExtra
       ? `Extra · ${formatMonthKey(r.mesReferencia)}`
-      : `Fixa · ${r.diaRecebimento != null ? `recebimento dia ${r.diaRecebimento}` : 'dia de recebimento não informado'}`;
+      : `Fixa · ${r.diaRecebimento != null ? `dia ${r.diaRecebimento}` : 'dia não informado'}`;
     return `
       <div class="account-card">
         <div class="account-main">

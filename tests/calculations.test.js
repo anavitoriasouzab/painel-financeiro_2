@@ -188,6 +188,25 @@ assertEqual(
   'calculateExpenseMonth: forma de pagamento fora do cartão ignora fechamento'
 );
 
+// Mais de um cartão cadastrado: precisa usar o fechamento do cartão
+// realmente usado (cartaoId), não sempre o primeiro da lista.
+const doisCartoes = baseData({ cartoes: [{ id: 'c1', diaFechamento: 5 }, { id: 'c2', diaFechamento: 20 }] });
+assertEqual(
+  Calc.calculateExpenseMonth(doisCartoes, '2026-09-10', 'cartao', 'c2'),
+  '2026-09',
+  'calculateExpenseMonth: com cartaoId, usa o fechamento do cartão certo (antes do fechamento do c2)'
+);
+assertEqual(
+  Calc.calculateExpenseMonth(doisCartoes, '2026-09-10', 'cartao', 'c1'),
+  '2026-10',
+  'calculateExpenseMonth: mesmo dia de compra, cartão diferente (c1) já fechou a fatura'
+);
+assertEqual(
+  Calc.calculateExpenseMonth(doisCartoes, '2026-09-10', 'cartao'),
+  '2026-10',
+  'calculateExpenseMonth: sem cartaoId informado, cai no primeiro cartão cadastrado (compatibilidade)'
+);
+
 // ---------------------------------------------------------------------
 // calculateGoalProgress / calculateMonthlyRequired / compareGoalToCapacity
 // ---------------------------------------------------------------------

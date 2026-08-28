@@ -203,9 +203,33 @@ const Accounts = {
     this._pendingComprovante = item ? item.comprovante || null : null;
 
     this._populateCategoriaSelect(item ? item.categoria : null);
+    this._populateCartaoSelect(item ? item.cartaoId : null);
     document.getElementById('field-vencimento').style.display = isRecorrente ? 'block' : 'none';
 
     document.getElementById('expense-modal').classList.add('active');
+  },
+
+  /** Select de cartão, só relevante pra quem tem mais de um cadastrado — com
+      um só (ou nenhum), o fechamento já é resolvido sem precisar escolher
+      (ver fallback em Calc.calculateExpenseMonth). */
+  _populateCartaoSelect(selectedId) {
+    const select = document.getElementById('expense-cartao');
+    if (!select) return;
+    select.innerHTML = appData.cartoes.map((c) => `<option value="${escapeAttr(c.id)}">${escapeHtml(c.nome)}</option>`).join('');
+    select.value = (selectedId && appData.cartoes.some((c) => c.id === selectedId)) ? selectedId : ((appData.cartoes[0] && appData.cartoes[0].id) || '');
+    this._toggleCartaoField();
+  },
+
+  /** Campo de cartão só aparece com "Cartão de crédito" selecionado e mais de um cartão cadastrado. */
+  handleFormaPagamentoChange() {
+    this._toggleCartaoField();
+  },
+
+  _toggleCartaoField() {
+    const field = document.getElementById('field-cartao');
+    if (!field) return;
+    const formaPagamento = document.getElementById('expense-forma-pagamento').value;
+    field.style.display = (formaPagamento === 'cartao' && appData.cartoes.length > 1) ? 'block' : 'none';
   },
 
   closeForm() {
@@ -296,6 +320,8 @@ const Accounts = {
     const vencimento = document.getElementById('expense-vencimento').value.trim() || null;
     const dataCompra = document.getElementById('expense-data').value || null;
     const formaPagamento = document.getElementById('expense-forma-pagamento').value || null;
+    const cartaoSelect = document.getElementById('expense-cartao');
+    const cartaoId = (formaPagamento === 'cartao' && cartaoSelect && cartaoSelect.value) || null;
 
     if (!nome || Number.isNaN(valor) || valor <= 0) {
       alert('Preencha o nome e um valor válido para a despesa.');
@@ -327,6 +353,7 @@ const Accounts = {
     item.data = dataCompra;
 
     item.formaPagamento = formaPagamento;
+    item.cartaoId = cartaoId;
 
     if (isRecorrente) {
       item.frequencia = item.frequencia || 'mensal';
@@ -336,14 +363,14 @@ const Accounts = {
       // a contar (considera o fechamento do cartão, igual à despesa variável);
       // sem data, preserva o que já estava salvo (null = sempre contou).
       item.inicioMesReferencia = dataCompra
-        ? Calc.calculateExpenseMonth(appData, dataCompra, formaPagamento)
+        ? Calc.calculateExpenseMonth(appData, dataCompra, formaPagamento, cartaoId)
         : (item.inicioMesReferencia || null);
     } else {
       // Com data informada, o mês é recalculado (considera o fechamento do
       // cartão se a forma de pagamento for "cartão"); sem data, preserva o
       // mês já salvo (edição) ou usa o mês atual (despesa nova).
       item.mesReferencia = dataCompra
-        ? Calc.calculateExpenseMonth(appData, dataCompra, formaPagamento)
+        ? Calc.calculateExpenseMonth(appData, dataCompra, formaPagamento, cartaoId)
         : (item.mesReferencia || appData.meta.mesReferenciaAtual);
     }
 

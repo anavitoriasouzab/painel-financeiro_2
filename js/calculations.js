@@ -124,11 +124,17 @@ const Calc = {
    * fatura do mês seguinte (no dia do fechamento a compra já não entra mais
    * na fatura atual). Sem cartão/fechamento configurado, ou pra outras
    * formas de pagamento, conta no mês da compra.
+   *
+   * `cartaoId` identifica QUAL cartão foi usado (relevante pra quem tem mais
+   * de um, cada um com seu próprio dia de fechamento). Sem `cartaoId`
+   * (despesas lançadas antes desse campo existir, ou usuário com um só
+   * cartão), cai no primeiro cartão cadastrado — mesmo comportamento de antes.
    */
-  calculateExpenseMonth(data, dataCompra, formaPagamento) {
+  calculateExpenseMonth(data, dataCompra, formaPagamento, cartaoId) {
     const [ano, mes, dia] = dataCompra.split('-').map(Number);
     const mesCompra = `${ano}-${String(mes).padStart(2, '0')}`;
-    const cartao = data.cartoes && data.cartoes[0];
+    const cartoes = data.cartoes || [];
+    const cartao = (cartaoId && cartoes.find((c) => c.id === cartaoId)) || cartoes[0];
     if (formaPagamento === 'cartao' && cartao && cartao.diaFechamento != null && dia >= cartao.diaFechamento) {
       return addMonths(mesCompra, 1);
     }

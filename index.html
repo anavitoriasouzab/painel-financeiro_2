@@ -61,7 +61,7 @@
     <div class="side-section side-section-highlight" id="sidebar-reminders-section" style="display:none;">
       <div class="side-section-title">Lembretes <span class="side-reminder-count" id="sidebar-reminder-count"></span></div>
       <div id="sidebar-reminders-list"></div>
-      <button class="side-see-all" onclick="navigateTo('analises')">Ver todos →</button>
+      <button class="side-see-all" onclick="navigateTo('analises')">Ver mais →</button>
     </div>
 
     <div class="side-footer">
@@ -296,7 +296,7 @@
           <p class="muted-text" style="margin-top:10px;">Estimativa baseada nos dados cadastrados. Sem margem de segurança configurada, os cenários usam 50% / 75% / 100% do saldo disponível como referência. Isto é só uma estimativa matemática — não é uma recomendação financeira.</p>
         </div>
 
-        <div class="section-title">Minhas metas</div>
+        <div class="section-title" id="planejamento-goals-anchor">Minhas metas</div>
         <div class="contas-header" style="margin-bottom:12px;">
           <div></div>
           <button class="primary-btn" onclick="Goals.openForm(null)">+ Nova meta</button>
@@ -349,6 +349,15 @@
           <div class="photo-upload-wrap">
             <img id="profile-photo-preview" class="profile-photo" style="display:none" alt="Foto de perfil" />
             <div id="profile-photo-placeholder" class="profile-photo avatar-placeholder-lg"><span class="material-symbols-outlined" aria-hidden="true">person</span></div>
+            <div class="photo-actions-row">
+              <label class="mini-btn icon-btn" for="profile-photo-input" title="Trocar foto" aria-label="Trocar foto">
+                <span class="material-symbols-outlined" aria-hidden="true">photo_camera</span>
+              </label>
+              <button type="button" class="mini-btn icon-btn danger" id="profile-photo-remove-btn" onclick="Profile.removePhoto()" title="Remover foto" aria-label="Remover foto" style="display:none;">
+                <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+              </button>
+            </div>
+            <input type="file" id="profile-photo-input" accept="image/*" style="display:none;" onchange="Profile.handlePhotoChange(this)" />
           </div>
           <div class="profile-header-fields">
             <div class="field">
@@ -357,27 +366,23 @@
             </div>
             <div class="profile-header-actions">
               <button class="primary-btn" onclick="Profile.saveName()">Salvar</button>
-              <label class="mini-btn" for="profile-photo-input">Trocar foto</label>
-              <button type="button" class="mini-btn" onclick="Profile.removePhoto()">Remover foto</button>
             </div>
-            <input type="file" id="profile-photo-input" accept="image/*" style="display:none;" onchange="Profile.handlePhotoChange(this)" />
           </div>
         </div>
 
-        <div class="section-title">Renda</div>
-        <div class="contas-header" style="margin-bottom:12px;">
-          <div></div>
-          <button class="primary-btn" onclick="Income.openForm(null)">+ Nova renda</button>
+        <div class="section-title income-section-title">
+          <span>Renda</span>
+          <button class="mini-btn" onclick="Income.openForm(null)">+ Nova renda</button>
         </div>
-        <div id="income-list" class="accounts-list"></div>
+        <div id="income-list" class="accounts-list compact-list"></div>
 
         <div class="section-title">Minhas metas</div>
         <div class="card" id="profile-goals-summary"></div>
 
         <div class="section-title">Reserva de emergência</div>
-        <div class="card">
-          <p class="muted-text" style="margin-bottom:12px;">O recomendado é ter de 3 a 6 meses do seu custo de vida guardados, para imprevistos como perda de renda ou uma despesa inesperada.</p>
-          <div class="field-checkbox" style="margin-bottom:12px;">
+        <div class="card settings-card">
+          <p class="muted-text" style="margin-bottom:10px;">Recomendado: 3 a 6 meses do seu custo de vida guardados.</p>
+          <div class="field-checkbox" style="margin-bottom:10px;">
             <label><input type="checkbox" id="reserva-possui" onchange="Profile.toggleReservaFields()" /> Já tenho uma reserva de emergência</label>
           </div>
           <div id="reserva-fields" style="display:none;">
@@ -385,16 +390,16 @@
               <div class="field"><label for="reserva-valor-atual">Valor guardado hoje (R$)</label><input id="reserva-valor-atual" type="number" min="0" step="0.01" placeholder="0.00" /></div>
               <div class="field"><label for="reserva-meta-valor">Meta (R$)</label><input id="reserva-meta-valor" type="number" min="0" step="0.01" placeholder="0.00" /></div>
             </div>
-            <div class="field"><label for="reserva-valor-mensal">Quanto pretende guardar por mês (R$)</label><input id="reserva-valor-mensal" type="number" min="0" step="0.01" placeholder="0.00" /></div>
+            <div class="field"><label for="reserva-valor-mensal">Aporte mensal (R$)</label><input id="reserva-valor-mensal" type="number" min="0" step="0.01" placeholder="0.00" /></div>
             <div class="progress-track"><div class="progress-fill" id="reserva-progress-fill" style="width:0%;"></div></div>
             <div class="goal-progress-meta"><span id="reserva-progress-label">—</span><span id="reserva-meses-label">—</span></div>
           </div>
-          <button class="primary-btn" style="width:100%;margin-top:12px;" onclick="Profile.saveReserva()">Salvar reserva de emergência</button>
+          <button class="primary-btn save-btn-compact" onclick="Profile.saveReserva()">Salvar</button>
         </div>
 
         <div class="section-title">Configurações — Limite de renda comprometida</div>
-        <div class="card">
-          <p class="muted-text" style="margin-bottom:12px;">Defina o quanto da sua renda você quer se comprometer no máximo. O app avisa (ou bloqueia, se você preferir) antes de um novo gasto ultrapassar esse limite.</p>
+        <div class="card settings-card">
+          <p class="muted-text" style="margin-bottom:10px;">Máximo da renda que pode ser comprometido — o app avisa (ou bloqueia) antes de ultrapassar.</p>
           <div class="field-row">
             <div class="field"><label for="settings-limite-percentual">Limite (% da renda)</label><input id="settings-limite-percentual" type="number" min="1" max="100" step="1" /></div>
             <div class="field">
@@ -406,14 +411,14 @@
               </select>
             </div>
           </div>
-          <button class="primary-btn" style="width:100%;" onclick="Profile.saveCommitmentSettings()">Salvar configuração</button>
+          <button class="primary-btn save-btn-compact" onclick="Profile.saveCommitmentSettings()">Salvar</button>
         </div>
 
         <div class="section-title">Configurações — Margem de segurança</div>
-        <div class="card">
-          <p class="muted-text" style="margin-bottom:12px;">Valor em R$ que você quer manter de reserva no saldo do mês antes de considerar o restante como potencial de investimento — sem isso, o "Potencial de investimento" mostra o saldo cheio.</p>
+        <div class="card settings-card">
+          <p class="muted-text" style="margin-bottom:10px;">Valor em R$ mantido de reserva no saldo do mês antes de contar como potencial de investimento.</p>
           <div class="field"><label for="settings-margem-seguranca">Margem de segurança (R$)</label><input id="settings-margem-seguranca" type="number" min="0" step="0.01" placeholder="0.00" /></div>
-          <button class="primary-btn" style="width:100%;" onclick="Profile.saveMargemSettings()">Salvar configuração</button>
+          <button class="primary-btn save-btn-compact" onclick="Profile.saveMargemSettings()">Salvar</button>
         </div>
 
         <div class="section-title">Backup e privacidade</div>
@@ -518,12 +523,17 @@
 
       <div class="field" id="field-forma-pagamento">
         <label for="expense-forma-pagamento">Forma de pagamento (opcional)</label>
-        <select id="expense-forma-pagamento">
+        <select id="expense-forma-pagamento" onchange="Accounts.handleFormaPagamentoChange()">
           <option value="">Não informado</option>
           <option value="cartao">Cartão de crédito</option>
           <option value="dinheiro">Dinheiro</option>
           <option value="pix">Pix</option>
         </select>
+      </div>
+
+      <div class="field" id="field-cartao" style="display:none;">
+        <label for="expense-cartao">Cartão usado</label>
+        <select id="expense-cartao"></select>
       </div>
 
       <div class="field">

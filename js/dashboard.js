@@ -113,7 +113,8 @@ const Dashboard = {
       if (visible.length) {
         remSection.style.display = 'block';
         if (remCount) remCount.textContent = visible.length;
-        remList.innerHTML = visible.slice(0, 3).map((r) => `<div class="side-reminder-chip"><span class="material-symbols-outlined" aria-hidden="true">${r.icon}</span> <span>${escapeHtml(r.texto)}</span></div>`).join('');
+        remList.innerHTML = '';
+        visible.slice(0, 2).forEach((r) => remList.appendChild(this._buildSidebarReminderChip(r)));
       } else {
         remSection.style.display = 'none';
       }
@@ -134,6 +135,27 @@ const Dashboard = {
         visible.forEach((r) => notifList.appendChild(this._buildNotifItem(r, state.lidas.includes(r.id))));
       }
     }
+  },
+
+  /** Chip compacto de lembrete na sidebar: texto em uma linha só (truncado
+      via CSS), clicável pra alternar entre resumido e completo (quebrando
+      linha), e um botão de excluir — versão abreviada do item completo
+      mostrado na central de notificações. */
+  _buildSidebarReminderChip(reminder) {
+    const el = document.createElement('div');
+    el.className = 'side-reminder-chip';
+    el.innerHTML = `
+      <span class="material-symbols-outlined" aria-hidden="true">${reminder.icon}</span>
+      <button type="button" class="side-reminder-text" title="Mostrar texto completo">${escapeHtml(reminder.texto)}</button>
+      <button class="side-reminder-dismiss" title="Excluir" aria-label="Excluir lembrete"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
+    `;
+    const textBtn = el.querySelector('.side-reminder-text');
+    textBtn.addEventListener('click', () => {
+      const expanded = el.classList.toggle('is-expanded');
+      textBtn.title = expanded ? 'Recolher texto' : 'Mostrar texto completo';
+    });
+    el.querySelector('.side-reminder-dismiss').addEventListener('click', () => this.dismissNotification(reminder.id));
+    return el;
   },
 
   _buildNotifItem(reminder, isRead) {
@@ -302,7 +324,7 @@ const Dashboard = {
     if (!list) return;
     const mes = data.meta.mesReferenciaAtual;
     const doMes = data.despesasVariaveis.filter((d) => d.mesReferencia === mes);
-    const recentes = doMes.slice(-3).reverse();
+    const recentes = doMes.slice(-2).reverse();
 
     const seeMoreBtn = document.getElementById('dash-recent-see-more');
     if (seeMoreBtn) seeMoreBtn.style.display = doMes.length > recentes.length ? 'inline-block' : 'none';
