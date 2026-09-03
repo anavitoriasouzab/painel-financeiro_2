@@ -477,6 +477,12 @@ section.view.active { display: block; animation: view-fade-in 0.25s ease; }
 }
 .eye-btn:hover { opacity: 1; color: var(--purple-text); }
 
+/* Agrupa o botão de adicionar (ver #add-renda-btn) com o eye-btn existente —
+   gap de 16px porque cada .eye-btn tem margin:-6px pra área de toque (ver
+   acima), então o espaço visível entre os dois ícones acaba sendo
+   16px - 6px - 6px = 4px, não os 16px cheios. */
+.label-btn-group { display: inline-flex; align-items: center; gap: 16px; flex-shrink: 0; }
+
 .chart-card-sm { min-height: 170px; display: block; }
 
 .duo-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-items: stretch; }
@@ -560,6 +566,7 @@ section.view.active { display: block; animation: view-fade-in 0.25s ease; }
   .bento-grid > .span-3  { grid-column: span 3; }
   .bento-grid > .span-4  { grid-column: span 4; }
   .bento-grid > .span-5  { grid-column: span 5; }
+  .bento-grid > .span-6  { grid-column: span 6; }
   .bento-grid > .span-7  { grid-column: span 7; }
   .bento-grid > .span-8  { grid-column: span 8; }
   .bento-grid > .span-12 { grid-column: span 12; }
@@ -972,6 +979,90 @@ section.view.active { display: block; animation: view-fade-in 0.25s ease; }
   cursor: pointer;
 }
 
+/* Botão "+ Nova despesa" + mic de adicionar por voz (ver VoiceExpense),
+   lado a lado como a segunda linha do .contas-header. */
+.contas-header-actions { display: flex; gap: 8px; align-items: stretch; }
+.contas-header-actions .primary-btn { flex: 1; }
+.mic-btn {
+  background: var(--surface-soft);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  width: 48px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.mic-btn:hover { color: var(--purple-text); border-color: var(--purple-300); }
+/* Pulso vermelho enquanto o navegador está ouvindo — mesmo feedback visual
+   de "gravando" usado em apps de voz, pra deixar claro que o mic está ativo
+   (ele não confirma nada sozinho, só ativa; a confirmação real acontece no
+   formulário pré-preenchido, ver VoiceExpense._handleTranscript). */
+.mic-btn.is-listening {
+  background: var(--danger-bg);
+  color: var(--danger);
+  border-color: var(--danger);
+  animation: mic-pulse 1.2s ease-in-out infinite;
+}
+@keyframes mic-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(192, 57, 43, 0.35); }
+  50% { box-shadow: 0 0 0 7px rgba(192, 57, 43, 0); }
+}
+[data-theme="dark"] .mic-btn.is-listening { box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.35); }
+
+/* Aviso do texto reconhecido por voz (ver VoiceExpense) — some por padrão;
+   só aparece quando o formulário foi aberto a partir do mic, pra deixar
+   claro que os campos foram preenchidos automaticamente e pedem conferência
+   antes de salvar (a gente nunca salva direto pela voz). */
+.voice-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: var(--purple-soft);
+  color: var(--purple-text);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  margin-bottom: 14px;
+}
+.voice-hint .material-symbols-outlined { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+
+/* Popup "Ouvindo..." (ver VoiceExpense.start) — some enquanto o navegador
+   grava, mostrando o texto reconhecido em tempo real (resultado interino)
+   antes de abrir o formulário de despesa já preenchido. */
+.voice-listening-sheet {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 10px;
+  padding: 32px 24px 24px;
+}
+.voice-listening-mic {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--danger-bg);
+  color: var(--danger);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: mic-pulse 1.2s ease-in-out infinite;
+}
+.voice-listening-mic .material-symbols-outlined { font-size: 28px; }
+.voice-listening-sheet h3 { font-family: var(--font-display); font-size: 16px; margin: 4px 0 0; }
+.voice-listening-transcript {
+  min-height: 40px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+.voice-listening-transcript.has-text { color: var(--text-primary); font-weight: 500; }
+.voice-listening-sheet .secondary-btn { margin-top: 6px; padding: 10px 20px; }
+
 .accounts-list { display: flex; flex-direction: column; gap: 10px; }
 
 .account-card {
@@ -1315,6 +1406,20 @@ section.view.active { display: block; animation: view-fade-in 0.25s ease; }
   background: var(--surface-soft);
 }
 .dash-mini-chip + .dash-mini-chip { margin-top: 6px; }
+
+/* dash-goals-list agora mora num card span-6/span-12, conforme o número de
+   metas destacadas (ver _renderGoalsSummary) — empilhados, os chips ficavam
+   esticados de ponta a ponta com muito vazio no meio. flex-wrap com
+   flex-basis deixa cada chip com largura de conteúdo (até 340px) em vez de
+   esticar pra preencher a linha — 1 chip só não vira uma barra vazia gigante,
+   e 2 chips ficam lado a lado quando cabem. */
+#dash-goals-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+#dash-goals-list .dash-mini-chip { flex: 1 1 240px; max-width: 340px; }
+#dash-goals-list .dash-mini-chip + .dash-mini-chip { margin-top: 0; }
 
 /* Variante clicável (resumo de metas no Perfil, ver Profile._renderGoalsSummary)
    — mesmo chip, só com affordance de que dá pra clicar pra ir editar a meta. */
@@ -1696,6 +1801,33 @@ section.view.active { display: block; animation: view-fade-in 0.25s ease; }
 .sc-flow-bar { display: flex; height: 22px; border-radius: 999px; overflow: hidden; background: var(--surface-soft); }
 .sc-flow-seg { height: 100%; transition: width 0.4s ease; }
 .sc-flow-seg + .sc-flow-seg { border-left: 2px solid var(--surface); }
+/* Linhas do próprio stackedBar (ver SimpleCharts.stackedBar) mais respiradas
+   que o padrão de .sc-legend-item (6px) — aqui são só 2-3 linhas por card,
+   então cabe um espaçamento maior sem apertar o card. Escopado a
+   .sc-flow-wrap pra não alterar as legendas de doughnut/line em outros
+   gráficos, que usam a mesma classe .sc-legend-item mas com mais itens. */
+.sc-flow-wrap .sc-legend-item { padding: 10px 4px; }
+
+/* Linha de comparação com a média (ver _renderFixovarAverageCompare) — dentro
+   do mesmo card do stackedBar acima, mas fora do container que ele controla
+   (stackedBar substitui o innerHTML do #chart-dash-fixovar inteiro). */
+.dash-avg-compare {
+  margin-top: 12px;
+  padding-top: 12px;
+  /* 21px = mesmo recuo do texto do rótulo nas linhas de cima (padding-left
+     4px do .sc-legend-item + bolinha de 9px + gap de 8px) — sem isso o badge
+     ficava desalinhado à esquerda das linhas "Fixos/recorrentes" acima. */
+  padding-left: 21px;
+  border-top: 1px solid var(--border);
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.dash-avg-compare:empty { display: none; }
+.dash-avg-compare .stat-delta { margin-top: 0; }
 
 .sc-ring-group { display: flex; flex-wrap: wrap; justify-content: space-around; gap: 14px; }
 .sc-ring-item { display: flex; flex-direction: column; align-items: center; gap: 6px; }

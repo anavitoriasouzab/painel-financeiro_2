@@ -206,6 +206,12 @@ const Accounts = {
     this._populateCartaoSelect(item ? item.cartaoId : null);
     document.getElementById('field-vencimento').style.display = isRecorrente ? 'block' : 'none';
 
+    // Aviso de reconhecimento de voz (ver VoiceExpense) some por padrão —
+    // só reaparece quando é a própria VoiceExpense quem preenche o formulário
+    // logo depois desta chamada, senão ficaria "grudado" de uma vez anterior.
+    const voiceHint = document.getElementById('expense-voice-hint');
+    if (voiceHint) voiceHint.style.display = 'none';
+
     document.getElementById('expense-modal').classList.add('active');
   },
 

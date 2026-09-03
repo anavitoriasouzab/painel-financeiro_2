@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+-<!DOCTYPE html>
 <html lang="pt-BR">
 
 <head>
@@ -143,19 +143,27 @@
 
           <div class="stat-grid">
             <div class="stat-card">
-              <div class="label">Renda mensal <button class="eye-btn" id="toggle-renda-visibility"
-                  onclick="Dashboard.toggleVisibility('renda')" title="Mostrar/ocultar"
-                  aria-label="Mostrar ou ocultar valor da renda mensal">
-                  <svg class="icon-eye-open" viewBox="0 -960 960 960" width="16" height="16" fill="currentColor">
-                    <path
-                      d="M607.5-372.5Q660-425 660-500t-52.5-127.5Q555-680 480-680t-127.5 52.5Q300-575 300-500t52.5 127.5Q405-320 480-320t127.5-52.5Zm-204-51Q372-455 372-500t31.5-76.5Q435-608 480-608t76.5 31.5Q588-545 588-500t-31.5 76.5Q525-392 480-392t-76.5-31.5ZM214-281.5Q94-363 40-500q54-137 174-218.5T480-800q146 0 266 81.5T920-500q-54 137-174 218.5T480-200q-146 0-266-81.5ZM480-500Zm207.5 160.5Q782-399 832-500q-50-101-144.5-160.5T480-720q-113 0-207.5 59.5T128-500q50 101 144.5 160.5T480-280q113 0 207.5-59.5Z" />
-                  </svg>
-                  <svg class="icon-eye-closed" viewBox="0 -960 960 960" width="16" height="16" fill="currentColor"
-                    style="display:none;">
-                    <path
-                      d="m644-428-58-58q9-47-27-88t-93-32l-58-58q17-8 34.5-12t37.5-4q75 0 127.5 52.5T660-500q0 20-4 37.5T644-428Zm128 126-58-56q38-29 67.5-63.5T832-500q-50-101-143.5-160.5T480-720q-29 0-57 4t-55 12l-62-62q41-17 84-25.5t90-8.5q151 0 269 83.5T920-500q-23 59-60.5 109.5T772-302Zm20 246L624-222q-35 11-70.5 16.5T480-200q-151 0-269-83.5T40-500q21-53 53-98.5t73-81.5L56-792l56-56 736 736-56 56ZM222-624q-29 26-53 57t-41 67q50 101 143.5 160.5T480-280q20 0 39-2.5t39-5.5l-36-38q-11 3-21 4.5t-21 1.5q-75 0-127.5-52.5T300-500q0-11 1.5-21t4.5-21l-84-82Zm319 93Zm-151 75Z" />
-                  </svg>
-                </button></div>
+              <div class="label">Renda mensal
+                <span class="label-btn-group">
+                  <button class="eye-btn" id="add-renda-btn" onclick="Income.openForm(null)"
+                    title="Adicionar renda" aria-label="Adicionar nova fonte de renda">
+                    <span class="material-symbols-outlined" aria-hidden="true" style="font-size:16px;">add</span>
+                  </button>
+                  <button class="eye-btn" id="toggle-renda-visibility"
+                    onclick="Dashboard.toggleVisibility('renda')" title="Mostrar/ocultar"
+                    aria-label="Mostrar ou ocultar valor da renda mensal">
+                    <svg class="icon-eye-open" viewBox="0 -960 960 960" width="16" height="16" fill="currentColor">
+                      <path
+                        d="M607.5-372.5Q660-425 660-500t-52.5-127.5Q555-680 480-680t-127.5 52.5Q300-575 300-500t52.5 127.5Q405-320 480-320t127.5-52.5Zm-204-51Q372-455 372-500t31.5-76.5Q435-608 480-608t76.5 31.5Q588-545 588-500t-31.5 76.5Q525-392 480-392t-76.5-31.5ZM214-281.5Q94-363 40-500q54-137 174-218.5T480-800q146 0 266 81.5T920-500q-54 137-174 218.5T480-200q-146 0-266-81.5ZM480-500Zm207.5 160.5Q782-399 832-500q-50-101-144.5-160.5T480-720q-113 0-207.5 59.5T128-500q50 101 144.5 160.5T480-280q113 0 207.5-59.5Z" />
+                    </svg>
+                    <svg class="icon-eye-closed" viewBox="0 -960 960 960" width="16" height="16" fill="currentColor"
+                      style="display:none;">
+                      <path
+                        d="m644-428-58-58q9-47-27-88t-93-32l-58-58q17-8 34.5-12t37.5-4q75 0 127.5 52.5T660-500q0 20-4 37.5T644-428Zm128 126-58-56q38-29 67.5-63.5T832-500q-50-101-143.5-160.5T480-720q-29 0-57 4t-55 12l-62-62q41-17 84-25.5t90-8.5q151 0 269 83.5T920-500q-23 59-60.5 109.5T772-302Zm20 246L624-222q-35 11-70.5 16.5T480-200q-151 0-269-83.5T40-500q21-53 53-98.5t73-81.5L56-792l56-56 736 736-56 56ZM222-624q-29 26-53 57t-41 67q50 101 143.5 160.5T480-280q20 0 39-2.5t39-5.5l-36-38q-11 3-21 4.5t-21 1.5q-75 0-127.5-52.5T300-500q0-11 1.5-21t4.5-21l-84-82Zm319 93Zm-151 75Z" />
+                    </svg>
+                  </button>
+                </span>
+              </div>
               <div class="value" id="stat-renda">—</div>
               <div id="delta-renda"></div>
               <div class="stat-spark" id="spark-renda"></div>
@@ -214,11 +222,13 @@
 
           <div class="bento-grid" id="dash-bento">
 
-            <div class="card chart-card span-8">
-              <div class="chart-card-header">
-                <div class="chart-mini-title"><span class="chart-icon-chip"><span class="material-symbols-outlined" aria-hidden="true">show_chart</span></span>Evolução financeira</div>
+            <div class="raiox-card span-8">
+              <div class="raiox-header">
+                <div class="raiox-title">Renda comprometida</div>
+                <div class="raiox-total" id="raiox-gasto-total"></div>
               </div>
-              <div id="chart-dash-analise" class="sc-container"></div>
+              <div id="raiox-gauge"></div>
+              <div class="raiox-message" id="raiox-message"></div>
             </div>
             <div class="card span-4">
               <div class="chart-mini-title"><span class="material-symbols-outlined" aria-hidden="true">leaderboard</span>Distribuição de despesas</div>
@@ -227,19 +237,18 @@
                 onclick="navigateTo('analises');">Ver detalhamento completo →</button>
             </div>
 
-            <div class="raiox-card span-5">
-              <div class="raiox-header">
-                <div class="raiox-title">Renda comprometida</div>
-                <div class="raiox-total" id="raiox-gasto-total"></div>
+            <div class="card chart-card span-6">
+              <div class="chart-card-header">
+                <div class="chart-mini-title"><span class="chart-icon-chip"><span class="material-symbols-outlined" aria-hidden="true">show_chart</span></span>Evolução financeira</div>
               </div>
-              <div id="raiox-gauge"></div>
-              <div class="raiox-message" id="raiox-message"></div>
+              <div id="chart-dash-analise" class="sc-container"></div>
             </div>
-            <div class="card chart-card-sm span-4">
+            <div class="card chart-card-sm span-6">
               <div class="chart-mini-title"><span class="material-symbols-outlined" aria-hidden="true" style="color:var(--danger)">stacked_bar_chart</span>Despesas do mês</div>
               <div id="chart-dash-fixovar" class="sc-container"></div>
+              <div class="dash-avg-compare" id="dash-fixovar-avg"></div>
             </div>
-            <div class="card span-3" id="dash-goals-section" style="display:none;">
+            <div class="card span-12" id="dash-goals-section" style="display:none;">
               <div class="chart-mini-title"><span class="material-symbols-outlined" aria-hidden="true" style="color:var(--success)">track_changes</span>Minhas metas</div>
               <div id="dash-goals-list"></div>
             </div>
@@ -268,7 +277,13 @@
               <button data-tab="variaveis">Variáveis</button>
               <button data-tab="parcelamentos">Parcelamentos</button>
             </div>
-            <button class="primary-btn" id="new-item-btn">+ Nova despesa</button>
+            <div class="contas-header-actions">
+              <button class="primary-btn" id="new-item-btn">+ Nova despesa</button>
+              <button class="mic-btn" type="button" id="voice-expense-btn" title="Adicionar despesa por voz"
+                aria-label="Adicionar despesa por voz, dizendo por exemplo &quot;gastei 40 reais em uber&quot;">
+                <span class="material-symbols-outlined" aria-hidden="true">mic</span>
+              </button>
+            </div>
           </div>
 
           <div class="accounts-list" id="accounts-list"></div>
@@ -698,6 +713,18 @@
     </button>
   </nav>
 
+  <!-- Popup: escutando despesa por voz (ver VoiceExpense) -->
+  <div class="modal-overlay" id="voice-listening-modal" role="dialog" aria-modal="true" aria-labelledby="voice-listening-title">
+    <div class="modal-sheet voice-listening-sheet">
+      <div class="voice-listening-mic" id="voice-listening-mic">
+        <span class="material-symbols-outlined" aria-hidden="true">mic</span>
+      </div>
+      <h3 id="voice-listening-title">Ouvindo...</h3>
+      <p class="voice-listening-transcript" id="voice-listening-transcript">Diga algo como “gastei 40 reais em uber”</p>
+      <button type="button" class="secondary-btn" id="voice-listening-cancel-btn">Cancelar</button>
+    </div>
+  </div>
+
   <!-- Modal: adicionar/editar despesa -->
   <div class="modal-overlay" id="expense-modal" role="dialog" aria-modal="true" aria-labelledby="expense-form-title">
     <div class="modal-sheet">
@@ -709,6 +736,7 @@
               d="m249-207-42-42 231-231-231-231 42-42 231 231 231-231 42 42-231 231 231 231-42 42-231-231-231 231Z" />
           </svg></button>
       </div>
+      <div class="voice-hint" id="expense-voice-hint" style="display:none;"></div>
       <form id="expense-form">
         <input type="hidden" id="expense-type" value="variavel" />
 
@@ -1111,6 +1139,7 @@
   <script src="js/calculations.js"></script>
   <script src="js/dashboard.js"></script>
   <script src="js/accounts.js"></script>
+  <script src="js/voice-expense.js"></script>
   <script src="js/installments.js"></script>
   <script src="js/charts.js"></script>
   <script src="js/profile.js"></script>

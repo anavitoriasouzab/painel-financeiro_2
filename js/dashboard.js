@@ -77,6 +77,10 @@ const Dashboard = {
     const destacadas = data.metas.filter((m) => m.destaque).slice(0, 2);
     if (destacadas.length) {
       goalsSection.style.display = 'block';
+      // 1 meta em destaque não precisa da linha inteira — span menor evita
+      // vazio grande à direita do chip único (ver span-12 padrão para 2).
+      goalsSection.classList.toggle('span-6', destacadas.length === 1);
+      goalsSection.classList.toggle('span-12', destacadas.length !== 1);
       goalsList.innerHTML = destacadas.map((m) => {
         const prog = Calc.calculateGoalProgress(m);
         const detalhe = prog ? `${formatPercent(prog.percent)}` : formatBRL(m.valorMensalDesejado) + '/mês';
@@ -424,6 +428,33 @@ const Dashboard = {
         { label: 'Variáveis + parcelas', value: variavelTotal, color: '#B69EF2' },
       ],
     });
+    this._renderFixovarAverageCompare(data, fixo + variavelTotal);
+  },
+
+  /**
+   * Compara o total do mês com a média dos últimos 6 meses (historicoMensal)
+   * — linha extra no card "Despesas do mês" (ver _renderHealthSection).
+   * Além de dar contexto, ocupa o espaço que sobrava quando esse card passou
+   * a dividir linha com "Evolução financeira" (bem mais alto).
+   */
+  _renderFixovarAverageCompare(data, totalMes) {
+    const el = document.getElementById('dash-fixovar-avg');
+    if (!el) return;
+    const { average, monthsUsed } = Calc.calculateAverageMonthlyExpenses(data);
+    if (average == null || !average) {
+      el.innerHTML = '<span class="stat-delta is-pending">Ainda sem histórico suficiente para comparar com a média</span>';
+      return;
+    }
+    const deltaPercent = ((totalMes - average) / average) * 100;
+    const isUp = deltaPercent > 0.5;
+    const isDown = deltaPercent < -0.5;
+    let cls = 'is-neutral';
+    let icon = DASH_ICON_NEUTRAL;
+    // Gastos: subir é ruim, descer é bom (mesma convenção de _renderStatTrend).
+    if (isUp) { cls = 'is-bad'; icon = DASH_ICON_UP; }
+    else if (isDown) { cls = 'is-good'; icon = DASH_ICON_DOWN; }
+    const sign = deltaPercent > 0 ? '+' : '';
+    el.innerHTML = `<span class="stat-delta ${cls}">${icon}${sign}${deltaPercent.toFixed(1)}%</span> vs. média dos últimos ${monthsUsed} meses (${formatBRL(average)})`;
   },
 
   /**

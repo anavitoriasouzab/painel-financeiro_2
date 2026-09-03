@@ -233,6 +233,19 @@ function setupExpenseModal() {
     Accounts.openForm('variavel', null);
   });
 
+  const voiceBtn = document.getElementById('voice-expense-btn');
+  if (voiceBtn) {
+    if (!VoiceExpense.isSupported()) {
+      // Sem suporte (Firefox, Safari) — some com o botão em vez de deixar
+      // ali pra clicar e só receber um alerta de "não funciona".
+      voiceBtn.style.display = 'none';
+    } else {
+      voiceBtn.addEventListener('click', () => VoiceExpense.toggle());
+    }
+  }
+  const voiceCancelBtn = document.getElementById('voice-listening-cancel-btn');
+  if (voiceCancelBtn) voiceCancelBtn.addEventListener('click', () => VoiceExpense.cancel());
+
   document.getElementById('expense-close-btn').addEventListener('click', () => Accounts.closeForm());
   document.getElementById('expense-cancel-btn').addEventListener('click', () => Accounts.closeForm());
   document.getElementById('expense-form').addEventListener('submit', (e) => Accounts.submitForm(e));
