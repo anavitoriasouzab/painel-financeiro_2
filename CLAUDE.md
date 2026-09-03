@@ -119,12 +119,11 @@ qualquer FK/coluna usada em filtro por usuário.
 - Login/cadastro com Google (`js/auth.js` → `_handleGoogleAuth`, botão
   `#auth-google-btn` em `login.html`) via `supabaseClient.auth.signInWithOAuth
   ({ provider: 'google' })`, redirecionando de volta pra `index.html`.
-  **Pendente de configuração manual**: o provedor Google precisa ser
-  habilitado no painel do Supabase (Authentication → Providers → Google,
-  com Client ID/Secret de um OAuth Client no Google Cloud Console) — sem
-  isso o botão mostra o erro "provider is not enabled". Ver também as
-  Redirect URLs em Authentication → URL Configuration (precisa incluir a
-  URL onde `index.html` é servido).
+  **✅ Configurado e funcionando**: provedor Google habilitado no painel do
+  Supabase (Authentication → Providers → Google, com Client ID/Secret de um
+  OAuth Client no Google Cloud Console) e Redirect URLs configuradas em
+  Authentication → URL Configuration. Cadastro/login com Google testado e
+  funcionando (contas criadas normalmente).
 - Em `login.html`, se já existe sessão válida, redireciona sozinho pra
   `index.html`
 - `supabase-config.js` expõe `SUPABASE_URL` e a `publishable key` no client

@@ -38,6 +38,7 @@ async function initApp(session) {
   setupToggleGroupAria();
   setupModalAccessibility();
   setupReportModal();
+  setupUnsavedChangesGuard();
 }
 
 /**
@@ -336,6 +337,24 @@ function setupThemeToggle() {
       localStorage.setItem('financas_theme', 'dark');
     }
     updateIcon();
+  });
+}
+
+/**
+ * Storage.save() é chamado sem `await` em quase todo lugar do app (edição
+ * fecha modal/atualiza a tela na hora, sem esperar a gravação no Supabase
+ * terminar) — sem este aviso, fechar a aba logo depois de editar algo
+ * cancelava a requisição de rede no meio e o dado nunca era salvo de
+ * verdade, mesmo já aparecendo "salvo" na tela. Navegadores modernos
+ * ignoram texto customizado aqui e mostram um prompt genérico próprio,
+ * mas isso já é suficiente: enquanto o prompt está na tela, a aba continua
+ * viva e a gravação em andamento tem tempo de terminar em segundo plano.
+ */
+function setupUnsavedChangesGuard() {
+  window.addEventListener('beforeunload', (e) => {
+    if (!Storage.isSaving()) return;
+    e.preventDefault();
+    e.returnValue = '';
   });
 }
 

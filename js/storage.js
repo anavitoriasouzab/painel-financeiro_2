@@ -53,14 +53,16 @@ function itemToSnakeRow(item, userId) {
 /** Tabelas de array simples: substituídas por completo a cada save(). */
 const ARRAY_TABLES = [
   { table: 'cartoes', key: 'cartoes' }, // primeiro: parcelamentos.cartao_id depende de cartoes.id existir
-  { table: 'rendas', key: 'rendas' },
+  // rendas tem `rpcReplace` (ver migration 0013): substituição via função no
+  // Postgres que faz delete+insert numa transação só. Sem isso, um insert
+  // rejeitado (rede, aba fechada/recarregada no meio do save) deixava a
+  // tabela vazia até o próximo save funcionar — a pessoa perdia TODAS as
+  // rendas, não só a que estava editando.
+  { table: 'rendas', key: 'rendas', rpcReplace: 'replace_rendas' },
   { table: 'categorias', key: 'categorias', stringItem: true, stringCol: 'nome' },
-  // Essas duas têm `rpcReplace`: substituição via função no Postgres (ver
-  // migration 0010) que faz delete+insert numa transação só, em vez de duas
-  // chamadas separadas como as outras tabelas — as duas ganharam uma
-  // constraint de unicidade (evita repetir despesa/parcelamento idêntico),
-  // e sem transação um insert rejeitado deixaria a tabela vazia até o
-  // próximo save funcionar (o delete já teria sido efetivado sozinho).
+  // Essas duas também têm `rpcReplace` (ver migration 0010), mesmo motivo —
+  // e ganharam uma constraint de unicidade (evita repetir despesa/parcelamento
+  // idêntico).
   { table: 'despesas_recorrentes', key: 'despesasRecorrentes', rpcReplace: 'replace_despesas_recorrentes' },
   { table: 'despesas_variaveis', key: 'despesasVariaveis' },
   { table: 'parcelamentos', key: 'parcelamentos', rpcReplace: 'replace_parcelamentos' },
@@ -238,6 +240,16 @@ function buildSnapshot(data, mesReferencia) {
 const Storage = {
   _userId: null,
 
+  // Contador de gravações em andamento no Supabase. save() é chamado sem
+  // `await` em ~20 pontos do app (edição fecha modal/re-renderiza na hora,
+  // sem esperar a rede) — sem isso, fechar a aba logo depois de editar algo
+  // cancelava a requisição no meio e o dado nunca chegava a ser salvo.
+  // isSaving() alimenta o aviso de "sair sem salvar" em app.js.
+  _pendingSaves: 0,
+  isSaving() {
+    return this._pendingSaves > 0;
+  },
+
   async _resolveUserId() {
     if (this._userId) return this._userId;
     const { data, error } = await supabaseClient.auth.getUser();
@@ -283,6 +295,7 @@ const Storage = {
 
   /** Salva o objeto de dados inteiro (substituição completa das tabelas). */
   async save(data) {
+    this._pendingSaves++;
     try {
       const uid = await this._resolveUserId();
       await this._writeAll(data, uid);
@@ -291,6 +304,8 @@ const Storage = {
       if (typeof toast === 'function') {
         toast(e.userFacing ? `⚠️ ${e.message}` : '⚠️ Não foi possível salvar suas alterações. Verifique sua conexão e tente novamente.');
       }
+    } finally {
+      this._pendingSaves--;
     }
   },
 

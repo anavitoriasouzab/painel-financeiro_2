@@ -16,6 +16,7 @@
 const Charts = {
   render(data) {
     this._renderAlerts(data);
+    this._renderNextMonthProjection(data);
     this._renderCategoryChart(data);
     this._renderTopExpenses(data);
     this._renderCashFlow(data);
@@ -43,6 +44,21 @@ const Charts = {
     } else {
       alerts.forEach((a) => wrap.appendChild(this._buildAlertItem(a)));
     }
+  },
+
+  /** Card "Próximo mês" em Análises — mesmo cálculo (Calc.calculateNextMonthProjection)
+      já mostrado em Planejamento, só que ao lado dos alertas: ambos respondem
+      "o que prestar atenção agora", ao contrário dos gráficos de histórico
+      mais abaixo nessa mesma tela. */
+  _renderNextMonthProjection(data) {
+    if (!document.getElementById('analises-next-month-label')) return;
+    const proj = Calc.calculateNextMonthProjection(data);
+    setText('analises-next-month-label', formatMonthKey(proj.mes));
+    setText('analises-next-month-renda', formatBRL(proj.renda));
+    setText('analises-next-month-gastos', formatBRL(proj.gastosPrevistos));
+    setText('analises-next-month-saldo', formatBRL(proj.saldoEstimado));
+    setText('analises-next-month-percentual', proj.percentual != null ? formatPercent(proj.percentual) : 'não informado');
+    setText('analises-next-month-obs', proj.obsVariaveis);
   },
 
   _buildAlertItem(alert) {

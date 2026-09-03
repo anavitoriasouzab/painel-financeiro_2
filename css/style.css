@@ -729,7 +729,7 @@ section.view.active { display: block; animation: view-fade-in 0.25s ease; }
     gap: 9px;
     padding: 4px 8px 18px;
   }
-  .side-logo-mark { color: var(--purple-text); flex-shrink: 0; }
+  .side-logo-mark { flex-shrink: 0; border-radius: 8px; }
   .side-logo-text {
     font-family: var(--font-display);
     font-weight: 700;
