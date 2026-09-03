@@ -14,17 +14,53 @@
  */
 
 const Charts = {
+  _evolutionPeriod: 'mensal',
+
   render(data) {
-    this._renderAlerts(data);
+    this._renderSummary(data);
     this._renderNextMonthProjection(data);
+    this._renderEvolutionToggle(data);
+    this._renderEvolutionChart(data);
     this._renderCategoryChart(data);
+    this._renderComparison(data);
+    this._renderHeatmap(data);
+    this._renderAlerts(data);
     this._renderTopExpenses(data);
     this._renderCashFlow(data);
     this._renderDailySpendingComparison(data);
-    this._renderEvolutionChart(data);
     this._renderInvestmentEvolutionChart(data);
     this._renderHistoryTable(data);
-    this._renderComparison(data);
+  },
+
+  /** Resumo do mês — indicadores de topo da tela de Análises (mais denso que os do Dashboard). */
+  _renderSummary(data) {
+    if (!document.getElementById('analises-resumo-entradas')) return;
+    const mes = data.meta.mesReferenciaAtual;
+    setText('analises-resumo-entradas', formatBRL(Calc.calculateMonthlyIncome(data, mes)));
+    setText('analises-resumo-despesas', formatBRL(Calc.calculateMonthlyExpenses(data, mes)));
+    setText('analises-resumo-saldo', formatBRL(Calc.calculateRemainingBalance(data, mes)));
+
+    const { average, monthsUsed } = Calc.calculateAverageMonthlyExpenses(data);
+    setText('analises-resumo-media', average != null ? formatBRL(average) : 'não informado');
+    setText('analises-resumo-media-sub', monthsUsed > 0
+      ? `Média dos últimos ${monthsUsed} ${monthsUsed === 1 ? 'mês' : 'meses'}`
+      : 'Ainda sem histórico suficiente');
+
+    const variacaoEl = document.getElementById('analises-resumo-variacao');
+    if (!variacaoEl) return;
+    const { deltaPercent } = Calc.calculateStatTrend(data, 'gastos');
+    if (deltaPercent == null) {
+      variacaoEl.innerHTML = (data.historicoMensal || []).length < 2
+        ? '<span class="stat-delta is-pending">Ainda sem histórico suficiente</span>'
+        : '<span class="stat-delta is-neutral">Sem variação</span>';
+      return;
+    }
+    // Gastos: subir é ruim, cair é bom — mesma lógica de Dashboard._renderStatTrend.
+    const isUp = deltaPercent > 0.05;
+    const isDown = deltaPercent < -0.05;
+    const cls = isUp ? 'is-bad' : isDown ? 'is-good' : 'is-neutral';
+    const sign = deltaPercent > 0 ? '+' : '';
+    variacaoEl.innerHTML = `<span class="stat-delta ${cls}">${sign}${deltaPercent.toFixed(1)}%</span>`;
   },
 
   /**
@@ -86,7 +122,7 @@ const Charts = {
   // parear com outro gráfico de tamanho fixo sem desbalancear o layout.
   _renderCategoryChart(data) {
     const breakdown = Calc.calculateCategoryBreakdown(data, data.meta.mesReferenciaAtual);
-    const items = breakdown.map((b, i) => ({ nome: b.categoria, valor: b.valor, color: SimpleCharts.colorFor(i) }));
+    const items = breakdown.map((b, i) => ({ nome: b.categoria, valor: b.valor, color: SimpleCharts.colorFor(i), icon: iconForCategory(b.categoria) }));
     SimpleCharts.rankedList('chart-categoria', items);
   },
 
@@ -127,13 +163,58 @@ const Charts = {
   },
 
   /**
-   * Evolução mensal — Renda, Gastos e Saldo. O Saldo ganha rótulo de valor
-   * acima de cada ponto (por isso não precisamos mais de um gráfico de
-   * barras à parte só pra mostrar o número exato) e dois selos automáticos:
-   * o melhor mês (maior saldo) e o primeiro mês em que o limite de
-   * comprometimento configurado foi ultrapassado, se algum dia foi.
+   * Toggle "Mensal"/"Diário (mês atual)" acima do gráfico de evolução — só
+   * habilita a opção diária se houver dado real com data lançada este mês
+   * (Calc.calculateDailySpendingCurve.hasData); nunca oferece uma
+   * granularidade que os dados não sustentam de verdade.
+   */
+  _renderEvolutionToggle(data) {
+    const wrap = document.getElementById('evolucao-period-toggle');
+    if (!wrap) return;
+    const mes = data.meta.mesReferenciaAtual;
+    const hasDaily = Calc.calculateDailySpendingCurve(data, mes).hasData;
+    const diarioBtn = wrap.querySelector('[data-period="diario"]');
+    if (diarioBtn) {
+      diarioBtn.disabled = !hasDaily;
+      diarioBtn.title = hasDaily ? '' : 'Ainda sem despesas com data lançada este mês';
+      if (!hasDaily && this._evolutionPeriod === 'diario') this._evolutionPeriod = 'mensal';
+    }
+    wrap.querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.period === this._evolutionPeriod));
+
+    if (wrap.dataset.bound) return;
+    wrap.dataset.bound = 'true';
+    wrap.querySelectorAll('button').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        if (btn.disabled) return;
+        this._evolutionPeriod = btn.dataset.period;
+        wrap.querySelectorAll('button').forEach((b) => b.classList.toggle('active', b === btn));
+        this._renderEvolutionChart(appData);
+      });
+    });
+  },
+
+  /**
+   * Evolução financeira. Modo "mensal" (padrão): Renda, Gastos e Saldo por
+   * mês, com rótulo de valor no Saldo e dois selos automáticos (melhor mês
+   * / limite ultrapassado). Modo "diário": gasto acumulado dia a dia do mês
+   * atual (mesma fonte do "Ritmo de gasto") — só fica disponível quando há
+   * dado real (ver _renderEvolutionToggle).
    */
   _renderEvolutionChart(data) {
+    if (this._evolutionPeriod === 'diario') {
+      const mes = data.meta.mesReferenciaAtual;
+      const { curve, hasData } = Calc.calculateDailySpendingCurve(data, mes);
+      if (!hasData) { SimpleCharts.line('chart-evolucao', { labels: [], series: [] }); return; }
+      SimpleCharts.line('chart-evolucao', {
+        labels: curve.map((_, i) => String(i + 1)),
+        monotone: true,
+        hideDots: true,
+        labelFormatter: formatBRLShort,
+        series: [{ name: `Acumulado (${formatMonthKeyShort(mes)})`, data: curve, color: SimpleCharts.colorFor(0), fillArea: true, fillOpacity: 0.25 }],
+      });
+      return;
+    }
+
     const hist = Calc.buildHistoricoComProjecao(data);
     const historico = data.historicoMensal || [];
 
@@ -167,12 +248,21 @@ const Charts = {
     });
   },
 
+  /** Calendário de gastos do mês atual (heatmap) — ver SimpleCharts.heatmap. */
+  _renderHeatmap(data) {
+    if (!document.getElementById('chart-heatmap-gastos')) return;
+    const mes = data.meta.mesReferenciaAtual;
+    const { days } = Calc.calculateSpendingHeatmapCells(data, mes);
+    SimpleCharts.heatmap('chart-heatmap-gastos', days, { emptyMessage: 'Lance despesas variáveis com data para ver o calendário de gastos deste mês.' });
+  },
+
   /**
-   * Gasto acumulado dia a dia — mês anterior, mês atual e mês seguinte
-   * (com base no que já está cadastrado: recorrentes de sempre + qualquer
-   * despesa variável já lançada com data futura). Cor mais escura = mês
-   * mais "resolvido" (passado), mais clara = mais incerto (futuro/previsto).
-   * Só aparece se pelo menos um dos três meses tiver dado com data real.
+   * Gasto acumulado dia a dia — mês anterior, mês atual e mês seguinte.
+   * Visual minimalista de propósito: linhas finas, sem pontos em cada dia
+   * (com ~30 dias × 3 séries, marcador em todo ponto ficava poluído) — a
+   * diferenciação vem de espessura/opacidade (mês atual em destaque) e do
+   * tracejado no mês previsto, não de bolinhas. Só aparece se pelo menos um
+   * dos três meses tiver dado com data real.
    */
   _renderDailySpendingComparison(data) {
     const wrap = document.getElementById('analises-ritmo-gasto-section');
@@ -196,12 +286,21 @@ const Charts = {
 
     SimpleCharts.line('chart-ritmo-gasto', {
       labels,
-      monotone: true,
+      // Sem monotone aqui de propósito: a curva suave (Catmull-Rom) ondula um
+      // pouco entre os pontos em vez de ficar reta nos trechos acumulados
+      // sem gasto novo — efeito pedido, mesmo não sendo 100% literal ao dado.
       hideDots: true,
+      showYAxis: true,
+      labelFormatter: (v) => `R$ ${formatBRLShort(v)}`,
       series: [
-        { name: `${formatMonthKeyShort(mesAnterior)}`, data: anterior.curve.slice(0, n), color: SimpleCharts.colorFor(2) },
-        { name: `${formatMonthKeyShort(mesAtual)} (atual)`, data: atual.curve.slice(0, n), color: SimpleCharts.colorFor(0) },
-        { name: `${formatMonthKeyShort(mesSeguinte)} (previsto)`, data: seguinte.curve.slice(0, n), color: SimpleCharts.colorFor(4) },
+        // Paleta neutra de propósito aqui (em vez de uma cor por mês) — o
+        // que diferencia cada linha é opacidade/tracejado/preenchimento, não
+        // o matiz nem a espessura (as três ficam igualmente finas); o mês
+        // atual ganha um gradiente sutil embaixo pra se destacar sem precisar
+        // de um traço mais grosso.
+        { name: `${formatMonthKeyShort(mesAnterior)}`, data: anterior.curve.slice(0, n), color: 'var(--text-muted)', strokeWidth: 1.75, opacity: 0.6 },
+        { name: `${formatMonthKeyShort(mesAtual)} (atual)`, data: atual.curve.slice(0, n), color: 'var(--purple-500)', strokeWidth: 1.5, fillArea: true, fillOpacity: 0.16 },
+        { name: `${formatMonthKeyShort(mesSeguinte)} (previsto)`, data: seguinte.curve.slice(0, n), color: 'var(--text-muted)', strokeWidth: 1.75, opacity: 0.6, dashed: true },
       ],
     });
   },
@@ -271,6 +370,13 @@ const Charts = {
     const a = data.historicoMensal.find((h) => h.mes === selA.value);
     const b = data.historicoMensal.find((h) => h.mes === selB.value);
     if (!a || !b) { result.innerHTML = ''; return; }
+
+    SimpleCharts.bar('compare-bars', {
+      labels: [formatMonthKeyShort(a.mes), formatMonthKeyShort(b.mes)],
+      values: [a.gastos, b.gastos],
+      colors: [SimpleCharts.colorFor(2), SimpleCharts.colorFor(0)],
+    });
+
     const diffGastos = b.gastos - a.gastos;
     const diffPct = a.gastos > 0 ? (diffGastos / a.gastos) * 100 : null;
     result.innerHTML = `

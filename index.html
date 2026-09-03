@@ -158,11 +158,13 @@
                 </button></div>
               <div class="value" id="stat-renda">—</div>
               <div id="delta-renda"></div>
+              <div class="stat-spark" id="spark-renda"></div>
             </div>
             <div class="stat-card">
               <div class="label">Gastos do mês</div>
               <div class="value" id="stat-gastos">—</div>
               <div id="delta-gastos"></div>
+              <div class="stat-spark" id="spark-gastos"></div>
             </div>
             <div class="stat-card">
               <div class="label">Disponível <button class="eye-btn" id="toggle-saldo-visibility"
@@ -180,6 +182,7 @@
                 </button></div>
               <div class="value" id="stat-saldo">—</div>
               <div id="delta-saldo"></div>
+              <div class="stat-spark" id="spark-saldo"></div>
             </div>
             <div class="stat-card" id="stat-reserva-card" style="display:none;">
               <div class="label label-eye-wrap"><span class="label-text">Reserva de emergência</span> <button
@@ -203,40 +206,52 @@
                   style="display:none;"></span></div>
               <div class="value" id="stat-potencial">—</div>
               <div id="delta-potencial"></div>
+              <div class="stat-spark" id="spark-potencial"></div>
               <div class="sub" id="stat-potencial-sub" onclick="this.classList.toggle('expanded')" title="Ver detalhes">
               </div>
             </div>
           </div>
 
-          <div id="dash-goals-section" style="display:none;">
-            <div class="section-title">Minhas metas</div>
-            <div class="card" id="dash-goals-list"></div>
-          </div>
+          <div class="bento-grid" id="dash-bento">
 
-          <div class="section-title">Raio-X financeiro</div>
-          <div class="raiox-card">
-            <div class="raiox-header">
-              <div class="raiox-title">Renda comprometida</div>
-              <div class="raiox-total" id="raiox-gasto-total"></div>
+            <div class="card chart-card span-8">
+              <div class="chart-card-header">
+                <div class="chart-mini-title"><span class="chart-icon-chip"><span class="material-symbols-outlined" aria-hidden="true">show_chart</span></span>Evolução financeira</div>
+              </div>
+              <div id="chart-dash-analise" class="sc-container"></div>
             </div>
-            <div id="raiox-gauge"></div>
-            <div class="raiox-message" id="raiox-message"></div>
-          </div>
+            <div class="card span-4">
+              <div class="chart-mini-title"><span class="material-symbols-outlined" aria-hidden="true">leaderboard</span>Distribuição de despesas</div>
+              <div id="chart-dash-categoria" class="sc-container"></div>
+              <button class="side-see-all" id="dash-categoria-see-more" style="display:none;"
+                onclick="navigateTo('analises');">Ver detalhamento completo →</button>
+            </div>
 
-          <div class="section-title">Despesas do mês</div>
-          <div class="card chart-card-sm">
-            <div id="chart-dash-fixovar" class="sc-container"></div>
-          </div>
+            <div class="raiox-card span-5">
+              <div class="raiox-header">
+                <div class="raiox-title">Renda comprometida</div>
+                <div class="raiox-total" id="raiox-gasto-total"></div>
+              </div>
+              <div id="raiox-gauge"></div>
+              <div class="raiox-message" id="raiox-message"></div>
+            </div>
+            <div class="card chart-card-sm span-4">
+              <div class="chart-mini-title"><span class="material-symbols-outlined" aria-hidden="true" style="color:var(--danger)">stacked_bar_chart</span>Despesas do mês</div>
+              <div id="chart-dash-fixovar" class="sc-container"></div>
+            </div>
+            <div class="card span-3" id="dash-goals-section" style="display:none;">
+              <div class="chart-mini-title"><span class="material-symbols-outlined" aria-hidden="true" style="color:var(--success)">track_changes</span>Minhas metas</div>
+              <div id="dash-goals-list"></div>
+            </div>
 
-          <div class="section-title">Renda x gastos</div>
-          <div class="card chart-card-sm">
-            <div id="chart-dash-analise" class="sc-container"></div>
-          </div>
+            <div class="card span-12">
+              <div class="chart-mini-title"><span class="material-symbols-outlined" aria-hidden="true">receipt_long</span>Transações recentes</div>
+              <div class="accounts-list" id="dash-recent-expenses"></div>
+              <button class="side-see-all" id="dash-recent-see-more" style="display:none;"
+                onclick="navigateTo('contas'); Accounts.switchToTab('variaveis');">Ver mais →</button>
+            </div>
 
-          <div class="section-title">Despesas recentes</div>
-          <div class="accounts-list" id="dash-recent-expenses"></div>
-          <button class="side-see-all" id="dash-recent-see-more" style="display:none;"
-            onclick="navigateTo('contas'); Accounts.switchToTab('variaveis');">Ver mais →</button>
+          </div>
 
         </section>
 
@@ -282,13 +297,33 @@
         <!-- ==================== ANÁLISES ==================== -->
         <section class="view" id="view-analises">
 
-          <div class="section-title" style="margin-top:0;">Alertas inteligentes</div>
-          <div id="alerts-list" class="notice-stack"></div>
+          <div class="section-title" style="margin-top:0;">Resumo do mês</div>
+          <div class="stat-grid">
+            <div class="stat-card">
+              <div class="label">Total de entradas</div>
+              <div class="value" id="analises-resumo-entradas">—</div>
+            </div>
+            <div class="stat-card">
+              <div class="label">Total de despesas</div>
+              <div class="value" id="analises-resumo-despesas">—</div>
+            </div>
+            <div class="stat-card">
+              <div class="label">Saldo</div>
+              <div class="value" id="analises-resumo-saldo">—</div>
+            </div>
+            <div class="stat-card">
+              <div class="label">Média de gastos</div>
+              <div class="value" id="analises-resumo-media">—</div>
+              <div class="sub" id="analises-resumo-media-sub"></div>
+            </div>
+            <div class="stat-card wide">
+              <div class="label">Variação vs. mês anterior</div>
+              <div id="analises-resumo-variacao" style="margin-top:6px;"></div>
+            </div>
+          </div>
 
           <!-- Projeção do próximo mês: mesmo cálculo (Calc.calculateNextMonthProjection)
-               já usado em Planejamento — aqui fica ao lado dos alertas, porque os dois
-               são sinais de "o que prestar atenção agora", diferente dos gráficos de
-               histórico mais abaixo. IDs com prefixo analises- pra não colidir com os
+               já usado em Planejamento. IDs com prefixo analises- pra não colidir com os
                elementos next-month-* da tela de Planejamento (as duas ficam no DOM ao
                mesmo tempo, só uma visível por vez). -->
           <div class="section-title">Próximo mês</div>
@@ -312,69 +347,84 @@
             <div class="notice-card info" style="margin-top:12px;" id="analises-next-month-obs"></div>
           </div>
 
-          <div id="analises-ritmo-gasto-section" style="display:none;">
-            <div class="section-title">Ritmo de gasto</div>
-            <div class="card chart-card">
+          <div class="bento-grid" id="analises-bento">
+
+            <div class="card chart-card span-8">
+              <div class="chart-card-header">
+                <div class="chart-mini-title"><span class="chart-icon-chip"><span class="material-symbols-outlined" aria-hidden="true">show_chart</span></span>Evolução financeira</div>
+                <div class="tabs" id="evolucao-period-toggle">
+                  <button type="button" class="active" data-period="mensal">Mensal</button>
+                  <button type="button" data-period="diario">Diário (mês atual)</button>
+                </div>
+              </div>
+              <div id="chart-evolucao" class="sc-container"></div>
+            </div>
+            <div class="card span-4">
+              <div class="chart-mini-title"><span class="material-symbols-outlined" aria-hidden="true">calendar_month</span>Calendário de gastos</div>
+              <div id="chart-heatmap-gastos" class="sc-container"></div>
+            </div>
+
+            <div class="card chart-card span-12">
+              <div class="chart-mini-title"><span class="material-symbols-outlined" aria-hidden="true">leaderboard</span>Análise por categoria</div>
+              <div id="chart-categoria" class="sc-container"></div>
+            </div>
+
+            <div class="card span-12">
+              <div class="chart-mini-title"><span class="material-symbols-outlined" aria-hidden="true">compare_arrows</span>Comparar dois meses</div>
+              <div class="field-row">
+                <div class="field"><label>Mês A</label><select id="compare-month-a"
+                    onchange="Charts._updateComparisonResult(appData)"></select></div>
+                <div class="field"><label>Mês B</label><select id="compare-month-b"
+                    onchange="Charts._updateComparisonResult(appData)"></select></div>
+              </div>
+              <div id="compare-bars" class="sc-container" style="margin:12px 0;"></div>
+              <div id="compare-result"></div>
+            </div>
+
+            <div class="section-title span-12">Insights financeiros</div>
+            <div class="span-12"><div id="alerts-list" class="notice-stack"></div></div>
+
+            <div class="card chart-card span-12" id="analises-ritmo-gasto-section" style="display:none;">
+              <div class="chart-mini-title"><span class="material-symbols-outlined" aria-hidden="true">speed</span>Ritmo de gasto</div>
               <div id="chart-ritmo-gasto" class="sc-container"></div>
             </div>
-          </div>
 
-          <div class="section-title">Gastos por categoria</div>
-          <div class="card chart-card">
-            <div id="chart-categoria" class="sc-container"></div>
-          </div>
-
-          <div class="section-title">Maiores despesas e fluxo financeiro</div>
-          <div class="duo-grid">
-            <div class="card chart-mini-card">
-              <div class="chart-mini-title">Maiores despesas</div>
-              <div id="chart-detalhamento" class="sc-container"></div>
+            <div class="span-12">
+              <div class="duo-grid">
+                <div class="card chart-mini-card">
+                  <div class="chart-mini-title"><span class="material-symbols-outlined" aria-hidden="true" style="color:var(--danger)">bar_chart</span>Maiores despesas</div>
+                  <div id="chart-detalhamento" class="sc-container"></div>
+                </div>
+                <div class="card chart-mini-card">
+                  <div class="chart-mini-title"><span class="material-symbols-outlined" aria-hidden="true" style="color:var(--danger)">stacked_bar_chart</span>Fluxo financeiro</div>
+                  <div id="chart-fluxo-financeiro" class="sc-container"></div>
+                </div>
+              </div>
             </div>
-            <div class="card chart-mini-card">
-              <div class="chart-mini-title">Fluxo financeiro</div>
-              <div id="chart-fluxo-financeiro" class="sc-container"></div>
-            </div>
-          </div>
 
-          <div class="section-title">Evolução mensal (renda, gastos, saldo)</div>
-          <div class="card chart-card">
-            <div id="chart-evolucao" class="sc-container"></div>
-          </div>
-
-          <div id="investimento-evolucao-wrap">
-            <div class="section-title">Evolução da capacidade de investimento</div>
-            <div class="card chart-card">
+            <div class="card chart-card span-12" id="investimento-evolucao-wrap">
+              <div class="chart-mini-title"><span class="material-symbols-outlined" aria-hidden="true" style="color:var(--success)">savings</span>Evolução da capacidade de investimento</div>
               <div id="chart-investimento-evolucao" class="sc-container"></div>
             </div>
-          </div>
 
-          <div class="section-title">Histórico financeiro</div>
-          <div class="card" style="overflow-x:auto;">
-            <table class="history-table">
-              <thead>
-                <tr>
-                  <th>Mês</th>
-                  <th>Renda</th>
-                  <th>Gastos</th>
-                  <th>Saldo</th>
-                  <th>% comprometido</th>
-                </tr>
-              </thead>
-              <tbody id="history-table-body"></tbody>
-            </table>
-            <button class="secondary-btn" style="margin-top:12px;width:100%;"
-              onclick="Charts.saveCurrentSnapshot()">Salvar mês atual no histórico</button>
-          </div>
-
-          <div class="section-title">Comparar dois meses</div>
-          <div class="card">
-            <div class="field-row">
-              <div class="field"><label>Mês A</label><select id="compare-month-a"
-                  onchange="Charts._updateComparisonResult(appData)"></select></div>
-              <div class="field"><label>Mês B</label><select id="compare-month-b"
-                  onchange="Charts._updateComparisonResult(appData)"></select></div>
+            <div class="card span-12" style="overflow-x:auto;">
+              <div class="chart-mini-title"><span class="material-symbols-outlined" aria-hidden="true">history</span>Histórico financeiro</div>
+              <table class="history-table">
+                <thead>
+                  <tr>
+                    <th>Mês</th>
+                    <th>Renda</th>
+                    <th>Gastos</th>
+                    <th>Saldo</th>
+                    <th>% comprometido</th>
+                  </tr>
+                </thead>
+                <tbody id="history-table-body"></tbody>
+              </table>
+              <button class="secondary-btn" style="margin-top:12px;width:100%;"
+                onclick="Charts.saveCurrentSnapshot()">Salvar mês atual no histórico</button>
             </div>
-            <div id="compare-result"></div>
+
           </div>
 
         </section>

@@ -437,6 +437,7 @@ section.view.active { display: block; animation: view-fade-in 0.25s ease; }
   box-shadow: var(--shadow-card);
   min-height: 92px;
   min-width: 0;
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
 
 .stat-card .label {
@@ -478,16 +479,105 @@ section.view.active { display: block; animation: view-fade-in 0.25s ease; }
 
 .chart-card-sm { min-height: 170px; display: block; }
 
-.duo-grid { display: grid; grid-template-columns: 1fr; gap: 12px; align-items: start; }
+.duo-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-items: stretch; }
 @media (min-width: 640px) {
-  .duo-grid { grid-template-columns: 1fr 1fr; }
+  .duo-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 }
 /* Quando só um dos dois cards de um duo-grid tem dado pra mostrar, o outro
    ocupa a linha toda em vez de deixar uma coluna vazia. */
 .duo-grid.single-col { grid-template-columns: 1fr; }
 
+/* ------------------------- Bento grid (Dashboard/Análises) ---------------
+   Composição de cards de tamanhos variados (hero + painel lateral), só usado
+   dentro de main/views — nunca em .app-shell. A regra base "tudo full width"
+   evita que um .span-8 vaze coluna implícita no mobile antes do breakpoint
+   de 860px definir os spans de verdade.
+   align-items:stretch (em vez de start) garante que cards vizinhos na mesma
+   linha (ex.: Raio-X + Despesas do mês + Minhas metas) sempre tenham a
+   mesma altura, mesmo com quantidades de conteúdo bem diferentes — sem
+   isso, o card com menos conteúdo "sobra" vazio embaixo enquanto o vizinho
+   continua mais alto, e as bordas dos cards não se alinham no fim da linha. */
+/* margin-top igual ao de .section-title (28px): a maioria dos cards aqui
+   dentro tem cabeçalho próprio (ver .chart-card-header/.chart-mini-title),
+   então não sobra nenhum .section-title externo antes do grid pra abrir
+   esse respiro — sem essa margem própria, o grid encostava direto no
+   elemento anterior (card, stat-grid etc.), sem gap nenhum. */
+.bento-grid { display: grid; grid-template-columns: 1fr; gap: 12px; align-items: stretch; margin-top: 28px; }
+.bento-grid > * { grid-column: 1 / -1; }
+
+/* Cards dentro de bento-grid/duo-grid viram coluna flex pra poder esticar
+   até a altura da linha inteira (herdada do stretch acima) e ainda assim
+   empurrar um link/botão final (.side-see-all) pro rodapé com margin-top:auto,
+   em vez de ele ficar "flutuando" logo depois do conteúdo. */
+.bento-grid > .card, .bento-grid > .raiox-card, .duo-grid > .card {
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+.bento-grid > .card > .side-see-all, .duo-grid > .card > .side-see-all {
+  margin-top: auto;
+  padding-top: 8px;
+}
+
+/* Cabeçalho interno de card (título + ícone + controles, ex.: pills de
+   período) na mesma linha — cada card fica autocontido, sem depender de um
+   .section-title solto por cima pra explicar o que ele é. */
+.chart-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.chart-card-header .chart-mini-title { margin-bottom: 0; }
+.chart-card-header .tabs { margin: 0; }
+
+/* Badge quadrado com o ícone do card (em vez do glyph solto) — mesmo
+   tratamento de "ícone em chip" usado como referência visual. */
+.chart-icon-chip {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.chart-icon-chip .material-symbols-outlined { font-size: 15px; }
+@media (min-width: 640px) {
+  /* minmax(0,1fr), não "1fr" puro — senão uma coluna "estoura" pra fora do
+     grid pra acomodar o conteúdo mínimo de algo lá dentro (ex.: um valor em
+     R$ que não pode quebrar linha), em vez de encolher o card. */
+  .bento-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+  .bento-grid > .span-2 { grid-column: span 2; }
+}
+@media (min-width: 860px) {
+  .bento-grid { grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 16px; }
+  .bento-grid > .span-3  { grid-column: span 3; }
+  .bento-grid > .span-4  { grid-column: span 4; }
+  .bento-grid > .span-5  { grid-column: span 5; }
+  .bento-grid > .span-7  { grid-column: span 7; }
+  .bento-grid > .span-8  { grid-column: span 8; }
+  .bento-grid > .span-12 { grid-column: span 12; }
+}
+
 .chart-mini-card { padding: 14px; min-width: 0; }
-.chart-mini-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-muted); margin-bottom: 10px; }
+.chart-mini-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+.chart-mini-title .material-symbols-outlined { font-size: 16px; color: var(--purple-text); }
 .chart-mini-card .sc-legend-value { min-width: 60px; }
 .chart-mini-card .sc-flow-wrap { gap: 10px; }
 
@@ -528,6 +618,10 @@ section.view.active { display: block; animation: view-fade-in 0.25s ease; }
 
 .stat-card.wide { grid-column: 1 / -1; }
 
+/* Mini tendência dentro do stat-card (SimpleCharts.sparkline) — só o
+   espaçamento, o SVG em si já vem estilizado por .sc-spark-*. */
+.stat-spark { margin-top: 6px; height: 32px; }
+
 /* -------------------------- Raio-X (signature element) ----------------- */
 
 .raiox-card {
@@ -564,6 +658,7 @@ section.view.active { display: block; animation: view-fade-in 0.25s ease; }
   align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
+  flex-wrap: wrap;
 }
 
 .raiox-title {
@@ -1034,8 +1129,19 @@ section.view.active { display: block; animation: view-fade-in 0.25s ease; }
 .stat-delta.is-good { background: var(--success-bg); color: var(--success); }
 .stat-delta.is-bad { background: var(--danger-bg); color: var(--danger); }
 .stat-delta.is-neutral { background: var(--surface-soft); color: var(--text-muted); }
+/* Sem 2 meses arquivados em historicoMensal ainda não dá pra calcular uma
+   variação real — esse estado avisa isso explicitamente em vez de simplesmente
+   sumir o badge (o que parecia um bug de carregamento). */
+.stat-delta.is-pending { background: var(--surface-soft); color: var(--text-muted); font-weight: 500; }
 [data-theme="dark"] .stat-delta.is-good { box-shadow: inset 0 0 0 1px rgba(52, 211, 153, 0.4); }
 [data-theme="dark"] .stat-delta.is-bad { box-shadow: inset 0 0 0 1px rgba(248, 113, 113, 0.4); }
+
+/* Hover do stat-card tingido pela direção da própria variação (verde/vermelho) —
+   microinteração que reforça o significado do badge sem exigir nenhum JS novo.
+   :has() é suportado nos navegadores modernos; sem suporte, o card só perde o
+   tingido no hover (degrada bem, nada quebra). */
+.stat-card:has(.stat-delta.is-good):hover { border-color: rgba(52, 211, 153, 0.5); background: var(--success-bg); }
+.stat-card:has(.stat-delta.is-bad):hover { border-color: rgba(248, 113, 113, 0.5); background: var(--danger-bg); }
 
 /* No escuro, o número principal ganha um leve brilho — o mesmo efeito
    "número aceso" dos dashboards de referência, sem exagerar. */
@@ -1412,7 +1518,7 @@ section.view.active { display: block; animation: view-fade-in 0.25s ease; }
 .sc-legend { display: flex; flex-direction: column; gap: 2px; width: 100%; }
 .sc-legend-inline { flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 8px; }
 .sc-legend-item {
-  display: flex; align-items: center; gap: 8px;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap; row-gap: 2px;
   font-size: 12.5px; color: var(--text-secondary);
   padding: 6px 4px;
   border-bottom: 1px solid var(--border);
@@ -1421,13 +1527,24 @@ section.view.active { display: block; animation: view-fade-in 0.25s ease; }
 .sc-legend-inline .sc-legend-item { font-size: 11.5px; border-bottom: none; padding: 0; }
 .sc-legend-compact { border-bottom: none; padding: 3px 0; font-size: 11px; }
 .sc-legend-compact .sc-legend-label { font-weight: 400; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sc-legend-label { flex: 1; min-width: 0; color: var(--text-primary); font-weight: 500; }
+/* overflow-wrap:anywhere é o que importa aqui — nomes como "Fixos/recorrentes"
+   não têm nenhum espaço, só uma "/", e o navegador não quebra linha nesse
+   caractere por padrão; sem isso o texto vazava por cima do valor ao lado
+   em vez de quebrar, num card mais estreito (ver .bento-grid). flex-wrap no
+   item acima é o reforço: se ainda assim não couber tudo numa linha só,
+   %/valor descem pra própria linha em vez de se sobrepor ao rótulo. */
+.sc-legend-label { flex: 1; min-width: 60px; color: var(--text-primary); font-weight: 500; overflow-wrap: anywhere; }
 .sc-legend-pct { font-size: 11px; color: var(--text-muted); min-width: 32px; text-align: right; font-variant-numeric: tabular-nums; }
 .sc-legend-value { font-weight: 700; color: var(--text-primary); min-width: 78px; text-align: right; font-variant-numeric: tabular-nums; }
 .sc-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
 
-.sc-vbar-wrap { display: flex; align-items: flex-end; justify-content: space-around; gap: 8px; height: 150px; padding-top: 18px; }
-.sc-vbar-col { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; flex: 1; height: 100%; gap: 5px; min-width: 0; border-radius: 8px; transition: background 0.15s ease; }
+/* Com muitas colunas num card estreito (ex.: "Maiores despesas" ao lado de
+   outro card no bento/duo-grid), min-width:0 evitava estouro mas deixava o
+   rótulo de cada barra ilegível, todo espremido. Piso de 44px por coluna +
+   scroll horizontal em vez de continuar encolhendo — mesmo padrão já usado
+   noutras listas horizontais do app quando o conteúdo não cabe. */
+.sc-vbar-wrap { display: flex; align-items: flex-end; justify-content: space-around; gap: 8px; height: 150px; padding-top: 18px; overflow-x: auto; }
+.sc-vbar-col { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; flex: 1 0 44px; height: 100%; gap: 5px; min-width: 44px; border-radius: 8px; transition: background 0.15s ease; }
 .sc-vbar-col:hover { background: var(--surface-soft); }
 .sc-vbar-value { font-size: 11px; font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; }
 .sc-vbar-track { width: 60%; max-width: 34px; flex: 1; display: flex; align-items: flex-end; background: var(--surface-soft); border-radius: 6px 6px 0 0; overflow: hidden; }
@@ -1436,7 +1553,7 @@ section.view.active { display: block; animation: view-fade-in 0.25s ease; }
 .sc-vbar-label { font-size: 11px; color: var(--text-secondary); text-align: center; line-height: 1.25; display: -webkit-box; line-clamp: 2; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
 .sc-hbar-wrap { display: flex; flex-direction: column; gap: 12px; padding: 4px 0; }
-.sc-hbar-row { display: grid; grid-template-columns: 88px 1fr auto; align-items: center; gap: 8px; border-radius: 8px; padding: 3px 5px; margin: -3px -5px; transition: background 0.15s ease, transform 0.15s ease; }
+.sc-hbar-row { display: grid; grid-template-columns: minmax(48px, 88px) minmax(0, 1fr) auto; align-items: center; gap: 8px; border-radius: 8px; padding: 3px 5px; margin: -3px -5px; transition: background 0.15s ease, transform 0.15s ease; }
 .sc-hbar-row:hover { background: var(--surface-soft); transform: translateX(2px); }
 .sc-hbar-label { font-size: 11.5px; color: var(--text-secondary); }
 .sc-hbar-track { height: 14px; background: var(--surface-soft); border-radius: 999px; overflow: hidden; }
@@ -1448,6 +1565,13 @@ section.view.active { display: block; animation: view-fade-in 0.25s ease; }
 .sc-line-plot { position: relative; width: 100%; height: 140px; }
 .sc-line-svg { width: 100%; height: 140px; display: block; }
 [data-theme="dark"] .sc-line-svg { filter: drop-shadow(0 0 10px rgba(129, 140, 248, 0.14)); }
+
+/* Ritmo de gasto agora é um card solo de largura total (span-12) com uma
+   única linha — na altura padrão de 140px isso virava uma fita fina e
+   esticada. Mais alto aqui pra ficar proporcional e confortável de olhar
+   numa largura tão grande (SVG usa preserveAspectRatio="none", então só
+   aumentar a altura do container já resolve, sem mexer no motor do gráfico). */
+#chart-ritmo-gasto .sc-line-plot, #chart-ritmo-gasto .sc-line-svg { height: 260px; }
 .sc-line-xlabels { position: relative; height: 16px; margin-top: 2px; }
 .sc-line-xlabels span { position: absolute; transform: translateX(-50%); font-size: 9.5px; color: var(--text-muted); white-space: nowrap; }
 
@@ -1461,6 +1585,30 @@ section.view.active { display: block; animation: view-fade-in 0.25s ease; }
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
+.sc-line-ytick {
+  position: absolute;
+  left: 0;
+  transform: translateY(-50%);
+  font-size: 9.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.sc-line-reference-label {
+  position: absolute;
+  right: 0;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 9.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  background: var(--surface);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+.sc-line-reference-label .material-symbols-outlined { font-size: 11px; }
 .sc-line-annotation {
   position: absolute;
   transform: translate(-50%, calc(-100% - 20px));
@@ -1473,11 +1621,70 @@ section.view.active { display: block; animation: view-fade-in 0.25s ease; }
   box-shadow: 0 4px 10px -4px rgba(0,0,0,0.35);
 }
 
-.sc-ranked-wrap { display: flex; flex-direction: column; gap: 14px; }
-.sc-ranked-row { display: grid; grid-template-columns: 110px 1fr auto; align-items: center; gap: 10px; border-radius: 8px; padding: 3px 5px; margin: -3px -5px; transition: background 0.15s ease, transform 0.15s ease; }
-.sc-ranked-row.has-rank { grid-template-columns: 22px 110px 1fr auto; }
+/* Hover interativo do gráfico de linha — linha-guia + tooltip seguem o
+   mouse (ver SimpleCharts._attachLineHover). Convive com pointLabels/
+   labelLastOnly/annotations acima, que continuam sempre visíveis. */
+.sc-line-hover-guide {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--border);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.1s ease;
+}
+.sc-line-hover-dot {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  border-radius: 50%;
+  border: 2px solid var(--surface);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.1s ease;
+}
+.sc-line-tooltip {
+  position: absolute;
+  pointer-events: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font-size: 11.5px;
+  box-shadow: var(--shadow-card);
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.1s ease;
+  z-index: 5;
+}
+.sc-line-tooltip-title { font-size: 10px; color: var(--text-muted); margin-bottom: 2px; }
+.sc-line-tooltip-row { display: flex; align-items: center; gap: 6px; font-weight: 600; }
+.sc-line-tooltip-row + .sc-line-tooltip-row { margin-top: 2px; }
+.sc-line-plot.is-hovering .sc-line-hover-guide,
+.sc-line-plot.is-hovering .sc-line-hover-dot,
+.sc-line-plot.is-hovering .sc-line-tooltip { opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .sc-line-hover-guide, .sc-line-hover-dot, .sc-line-tooltip { transition: none; }
+}
+
+.sc-ranked-wrap { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+/* minmax(0,1fr) (não "1fr" puro) e a coluna do rótulo com teto — não piso —
+   fixo: sem isso, um card estreito (ex.: bento lateral em ~900px) fazia essa
+   grid "estourar" pra fora do card em vez de encolher, porque uma coluna
+   1fr sozinha não reduz abaixo do conteúdo mínimo dos vizinhos de largura
+   fixa/auto. */
+.sc-ranked-row { display: grid; grid-template-columns: minmax(56px, 110px) minmax(0, 1fr) auto; align-items: center; gap: 10px; border-radius: 8px; padding: 3px 5px; margin: -3px -5px; transition: background 0.15s ease, transform 0.15s ease; }
+.sc-ranked-row.has-rank { grid-template-columns: 22px minmax(56px, 110px) minmax(0, 1fr) auto; }
+.sc-ranked-row.has-icon { grid-template-columns: 26px minmax(56px, 110px) minmax(0, 1fr) auto; }
+.sc-ranked-row.has-icon.has-rank { grid-template-columns: 22px 26px minmax(56px, 110px) minmax(0, 1fr) auto; }
 .sc-ranked-row:hover { background: var(--surface-soft); transform: translateX(2px); }
 .sc-ranked-rank { font-size: 12px; font-weight: 700; color: var(--text-muted); }
+/* Chip colorido por categoria (mesma cor da barra daquele item) — reforça a
+   variação de cor por categoria também no ícone, não só na barra. */
+.sc-ranked-icon { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.sc-ranked-icon .material-symbols-outlined { font-size: 14px; }
 .sc-ranked-label { font-size: 12.5px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sc-ranked-track { height: 10px; background: var(--surface-soft); border-radius: 999px; overflow: hidden; }
 .sc-ranked-fill { height: 100%; border-radius: 999px; transition: width 0.5s cubic-bezier(.22,1,.36,1); }
@@ -1495,6 +1702,35 @@ section.view.active { display: block; animation: view-fade-in 0.25s ease; }
 .sc-ring-svg { width: 60px; height: 60px; }
 .sc-ring-text { fill: var(--text-primary); font-size: 15px; font-weight: 700; font-family: var(--font-display); }
 .sc-ring-label { font-size: 10px; color: var(--text-muted); text-align: center; max-width: 68px; }
+
+/* Heatmap de calendário (SimpleCharts.heatmap) — um único matiz roxo, 4
+   níveis de intensidade por quartil dos dias com gasto > 0. Dia sem gasto
+   fica na cor neutra de superfície (nível 0), nunca inventamos intensidade. */
+.sc-heatmap-wrap { display: flex; flex-direction: column; gap: 8px; }
+.sc-heatmap-weekdays, .sc-heatmap-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.sc-heatmap-weekdays { font-size: 10px; color: var(--text-muted); text-align: center; }
+.sc-heatmap-cell { aspect-ratio: 1; border-radius: 6px; background: var(--surface-soft); border: 1px solid var(--border); transition: transform 0.15s ease; }
+.sc-heatmap-cell:not(.is-empty):hover { transform: scale(1.08); }
+.sc-heatmap-cell[data-level="1"] { background: rgba(124, 77, 224, 0.18); border-color: transparent; }
+.sc-heatmap-cell[data-level="2"] { background: rgba(124, 77, 224, 0.38); border-color: transparent; }
+.sc-heatmap-cell[data-level="3"] { background: rgba(124, 77, 224, 0.62); border-color: transparent; }
+.sc-heatmap-cell[data-level="4"] { background: var(--purple-500); border-color: transparent; }
+.sc-heatmap-cell.is-empty { visibility: hidden; }
+[data-theme="dark"] .sc-heatmap-cell[data-level="1"] { background: rgba(182, 158, 242, 0.16); }
+[data-theme="dark"] .sc-heatmap-cell[data-level="2"] { background: rgba(182, 158, 242, 0.34); }
+[data-theme="dark"] .sc-heatmap-cell[data-level="3"] { background: rgba(182, 158, 242, 0.58); }
+[data-theme="dark"] .sc-heatmap-cell[data-level="4"] { background: var(--purple-300); }
+.sc-heatmap-legend { display: flex; align-items: center; gap: 8px; font-size: 10.5px; color: var(--text-muted); justify-content: flex-end; }
+/* Barra de gradiente contínuo (menos → mais), em vez de amostras discretas —
+   mesma leitura de "escala de intensidade" de um heatmap de referência. */
+.sc-heatmap-legend-scale { width: 64px; height: 8px; border-radius: 999px; background: linear-gradient(90deg, var(--surface-soft), var(--purple-500)); }
+[data-theme="dark"] .sc-heatmap-legend-scale { background: linear-gradient(90deg, var(--surface-soft), var(--purple-300)); }
+
+/* Estado vazio elegante — usado por heatmap/distribuição/etc quando ainda
+   não há dado real suficiente (diferente do .sc-empty textual simples). */
+.empty-state-mini { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 24px 12px; color: var(--text-muted); }
+.empty-state-mini .material-symbols-outlined { font-size: 26px; opacity: 0.5; }
+.empty-state-mini p { margin: 0; font-size: 12.5px; }
 
 .sc-spark-wrap { position: relative; }
 .sc-spark-svg { width: 100%; height: 40px; display: block; margin-top: 6px; }

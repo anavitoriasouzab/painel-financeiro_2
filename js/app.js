@@ -290,6 +290,9 @@ function switchView(viewId) {
     section.classList.toggle('active', section.id === `view-${viewId}`);
   });
   try {
+    if (viewId === 'dashboard') {
+      Dashboard.render(appData);
+    }
     if (viewId === 'contas') {
       Accounts._renderSummaryChart(appData);
     }
@@ -337,6 +340,13 @@ function setupThemeToggle() {
       localStorage.setItem('financas_theme', 'dark');
     }
     updateIcon();
+
+    // Gráficos SVG (sparklines, heatmap, hover do line chart) trocam de cor
+    // conforme SimpleCharts.isDark() — sem isso, eles só atualizavam na
+    // próxima navegação entre telas, não no próprio clique do tema.
+    const activeView = document.querySelector('section.view.active');
+    if (activeView && activeView.id === 'view-dashboard') Dashboard.render(appData);
+    else if (activeView && activeView.id === 'view-analises') Charts.render(appData);
   });
 }
 

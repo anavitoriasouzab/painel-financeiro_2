@@ -61,8 +61,9 @@ const Dashboard = {
     this._renderHeader(mes);
     this._renderStats(data, { renda, gastos, saldo, potencial });
     this._renderReservaCard(data);
-    this._renderRaioX(data, { percentComprometido, renda, gastos, saldo });
-    this._renderCharts(data, { renda, gastos, saldo });
+    this._renderCategoryDistribution(data);
+    this._renderHealthSection(data, { percentComprometido, renda, gastos, saldo });
+    this._renderEvolutionChart(data);
     this._renderRecentExpenses(data);
     this._renderGoalsSummary(data);
     this._renderReminders(data);
@@ -211,6 +212,30 @@ const Dashboard = {
     this._renderStatTrend(data, 'gastos', 'gastos', 'down');
     this._renderStatTrend(data, 'saldo', 'saldo', 'up');
     this._renderStatTrend(data, 'potencial', 'potencialInvestimento', 'up');
+
+    this._renderStatSparkline(data, 'renda', 'spark-renda', '#4B2E9E', oculto.renda);
+    this._renderStatSparkline(data, 'gastos', 'spark-gastos', '#C0392B', false);
+    this._renderStatSparkline(data, 'saldo', 'spark-saldo', '#1F9E6B', oculto.saldo);
+    this._renderStatSparkline(data, 'potencialInvestimento', 'spark-potencial', '#7C4DE0', false);
+  },
+
+  /**
+   * Mini tendência (SimpleCharts.sparkline) dentro de cada stat-card, usando
+   * só pontos reais (arquivados + o mês em andamento, nunca projeção
+   * futura — buildHistoricoComProjecao(data, 0) não gera nenhuma). Com
+   * menos de 2 pontos o slot fica oculto: um sparkline achatado fabricado
+   * seria pior do que simplesmente não mostrar nada. Respeita "ocultar
+   * valores" do mesmo jeito que o valor grande do card.
+   */
+  _renderStatSparkline(data, field, containerId, color, oculto) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    if (oculto) { container.style.display = 'none'; container.innerHTML = ''; return; }
+    const hist = Calc.buildHistoricoComProjecao(data, 0);
+    const valores = hist.map((h) => h[field]).filter((v) => v != null);
+    if (valores.length < 2) { container.style.display = 'none'; container.innerHTML = ''; return; }
+    container.style.display = '';
+    SimpleCharts.sparkline(containerId, valores, color, { pulse: true, valueLabel: formatBRLShort(valores[valores.length - 1]) });
   },
 
   /** Card de Reserva de emergência no Dashboard — só aparece pra quem já
@@ -258,7 +283,14 @@ const Dashboard = {
 
     const el = document.getElementById(`delta-${statKey}`);
     if (!el) return;
-    if (deltaPercent == null) { el.innerHTML = ''; return; }
+    if (deltaPercent == null) {
+      // Sem 2 meses arquivados ainda não dá pra calcular uma variação real —
+      // avisa isso explicitamente em vez de deixar o badge sumir em silêncio.
+      el.innerHTML = (data.historicoMensal || []).length < 2
+        ? '<span class="stat-delta is-pending">Ainda sem histórico suficiente</span>'
+        : '';
+      return;
+    }
 
     const isUp = deltaPercent > 0.05;
     const isDown = deltaPercent < -0.05;
@@ -359,10 +391,28 @@ const Dashboard = {
     Accounts.openForm('variavel', id);
   },
 
-  /** Dois gráficos analíticos direto na home, desenhados em SVG nativo (sem dependência externa). */
-  _renderCharts(data, { renda, gastos, saldo }) {
+  /**
+   * Top-5 categorias que mais pesam nas despesas do mês — versão "resumo"
+   * do mesmo cálculo (Calc.calculateCategoryBreakdown) que Análises mostra
+   * por completo; com mais de 5 categorias, um link leva pra lá em vez de
+   * duplicar a lista inteira aqui.
+   */
+  _renderCategoryDistribution(data) {
     const mes = data.meta.mesReferenciaAtual;
+    const breakdown = Calc.calculateCategoryBreakdown(data, mes);
+    const top = breakdown.slice(0, 5);
+    const items = top.map((b) => ({ nome: b.categoria, valor: b.valor, color: colorForCategory(data, b.categoria), icon: iconForCategory(b.categoria) }));
+    SimpleCharts.rankedList('chart-dash-categoria', items);
 
+    const seeMoreBtn = document.getElementById('dash-categoria-see-more');
+    if (seeMoreBtn) seeMoreBtn.style.display = breakdown.length > top.length ? 'inline-block' : 'none';
+  },
+
+  /** Raio-X financeiro (gauge, inalterado) + composição fixo×variável, lado a lado na seção "Saúde financeira". */
+  _renderHealthSection(data, { percentComprometido, renda, gastos, saldo }) {
+    this._renderRaioX(data, { percentComprometido, renda, gastos, saldo });
+
+    const mes = data.meta.mesReferenciaAtual;
     // Fixo x variável: só duas fatias, então uma barra de composição (padrão de "alocação de orçamento")
     // comunica melhor que uma rosca, e mantém a altura do card equivalente à do card vizinho.
     const fixo = Calc.calculateFixedExpenses(data, mes);
@@ -374,10 +424,14 @@ const Dashboard = {
         { label: 'Variáveis + parcelas', value: variavelTotal, color: '#B69EF2' },
       ],
     });
+  },
 
-    // Análise mensal — Renda x Gastos por mês (cresce conforme os meses viram,
-    // e já ganha um ponto "previsto" pro mês seguinte assim que houver alguma
-    // despesa/renda real lançada pra lá — ver Calc.buildHistoricoComProjecao).
+  /**
+   * Evolução financeira — Renda x Gastos por mês (cresce conforme os meses
+   * viram, e já ganha um ponto "previsto" pro mês seguinte assim que houver
+   * alguma despesa/renda real lançada pra lá — ver Calc.buildHistoricoComProjecao).
+   */
+  _renderEvolutionChart(data) {
     const hist = Calc.buildHistoricoComProjecao(data);
     const histLabels = hist.map((h) => formatMonthKeyShort(h.mes) + (h.previsto ? ' (prev.)' : h.emAndamento ? ' (atual)' : ''));
     SimpleCharts.line('chart-dash-analise', {

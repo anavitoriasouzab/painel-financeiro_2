@@ -335,7 +335,13 @@ const Calc = {
    * "acumulado" seria só zero o mês inteiro, então quem chama deve tratar
    * como "sem dados" em vez de desenhar uma linha reta em zero.
    */
-  calculateDailySpendingCurve(data, mesReferencia) {
+  /**
+   * Total gasto em cada dia do mês (não acumulado) — mesma fonte usada pela
+   * curva acumulada (`calculateDailySpendingCurve`) e pelo heatmap de
+   * calendário (`calculateSpendingHeatmapCells`), extraída aqui pra não
+   * duplicar a regex de "dia de vencimento" nem o filtro por mesReferencia.
+   */
+  _dailyTotalsForMonth(data, mesReferencia) {
     const [ano, mes] = mesReferencia.split('-').map(Number);
     const daysInMonth = new Date(ano, mes, 0).getDate();
     const byDay = new Array(daysInMonth + 1).fill(0);
@@ -357,6 +363,11 @@ const Calc = {
       hasData = true;
     });
 
+    return { byDay, daysInMonth, hasData };
+  },
+
+  calculateDailySpendingCurve(data, mesReferencia) {
+    const { byDay, daysInMonth, hasData } = this._dailyTotalsForMonth(data, mesReferencia);
     const curve = [];
     let acc = 0;
     for (let day = 1; day <= daysInMonth; day++) {
@@ -364,6 +375,20 @@ const Calc = {
       curve.push(acc);
     }
     return { curve, hasData };
+  },
+
+  /**
+   * Gasto de cada dia do mês (não acumulado), pronto para o heatmap de
+   * calendário — um item por dia, com a data completa pra saber em qual
+   * dia da semana ele cai (ver SimpleCharts.heatmap).
+   */
+  calculateSpendingHeatmapCells(data, mesReferencia) {
+    const { byDay, daysInMonth, hasData } = this._dailyTotalsForMonth(data, mesReferencia);
+    const days = [];
+    for (let day = 1; day <= daysInMonth; day++) {
+      days.push({ day, date: `${mesReferencia}-${String(day).padStart(2, '0')}`, value: byDay[day] });
+    }
+    return { days, hasData };
   },
 
   /** "O que muda no próximo mês?" — hoje só detecta parcelas que terminam; novas despesas futuras entram aqui quando forem cadastradas com data de início. */
@@ -543,7 +568,12 @@ const Calc = {
     return itens.sort((a, b) => b.valor - a.valor).slice(0, limit);
   },
 
-  calculateCategoryBreakdown(data, mesReferencia) {
+  /**
+   * Total gasto por categoria no mês informado (recorrentes + variáveis +
+   * parcelas) — extraído de `calculateCategoryBreakdown` para ser
+   * reaproveitado também pela comparação mês-a-mês de categoria.
+   */
+  _categoryTotalsForMonth(data, mesReferencia) {
     const totals = {};
     const add = (categoria, valor) => {
       const key = categoria || 'Não informado';
@@ -556,9 +586,60 @@ const Calc = {
       .filter((d) => d.mesReferencia === mesReferencia)
       .forEach((d) => add(d.categoria, d.valor));
     data.parcelamentos.forEach((p) => add(p.categoria, p.valorParcela));
+    return totals;
+  },
+
+  calculateCategoryBreakdown(data, mesReferencia) {
+    const totals = this._categoryTotalsForMonth(data, mesReferencia);
     return Object.entries(totals)
       .map(([categoria, valor]) => ({ categoria, valor }))
       .sort((a, b) => b.valor - a.valor);
+  },
+
+  /**
+   * Compara o gasto de uma categoria entre o mês informado e o anterior.
+   * `null` se a categoria não teve gasto em NENHUM dos dois meses (evita
+   * "subiu 100%" artificial de um 0→algo que na prática é só a categoria
+   * não ter aparecido ainda).
+   */
+  calculateCategoryMonthOverMonth(data, categoria, mesAtual) {
+    const totaisAtual = this._categoryTotalsForMonth(data, mesAtual);
+    const totaisAnterior = this._categoryTotalsForMonth(data, addMonths(mesAtual, -1));
+    const valorAtual = totaisAtual[categoria] || 0;
+    const valorAnterior = totaisAnterior[categoria] || 0;
+    if (!valorAtual && !valorAnterior) return null;
+    const deltaAbs = valorAtual - valorAnterior;
+    const deltaPercent = valorAnterior > 0 ? (deltaAbs / valorAnterior) * 100 : null;
+    return { categoria, valorAtual, valorAnterior, deltaAbs, deltaPercent };
+  },
+
+  /**
+   * As categorias que mais mudaram (pra cima ou pra baixo) em relação ao
+   * mês anterior, ordenadas pela magnitude da variação — base dos insights
+   * tipo "Alimentação subiu 18% em relação ao mês anterior" (ver generateAlerts).
+   */
+  calculateTopCategoryMovers(data, mesAtual, limit = 3) {
+    const categorias = new Set(data.categorias || []);
+    Object.keys(this._categoryTotalsForMonth(data, mesAtual)).forEach((c) => categorias.add(c));
+    Object.keys(this._categoryTotalsForMonth(data, addMonths(mesAtual, -1))).forEach((c) => categorias.add(c));
+    return Array.from(categorias)
+      .map((categoria) => this.calculateCategoryMonthOverMonth(data, categoria, mesAtual))
+      .filter((m) => m && m.deltaPercent != null)
+      .sort((a, b) => Math.abs(b.deltaPercent) - Math.abs(a.deltaPercent))
+      .slice(0, limit);
+  },
+
+  /**
+   * Média de gastos mensais usando só snapshots reais já arquivados em
+   * historicoMensal (nunca o mês em andamento, que puxaria a média pra
+   * baixo por estar incompleto). `monthsUsed` pode ser menor que
+   * `monthsBack` numa conta nova — a UI deve rotular com o valor real
+   * ("média dos últimos N meses"), nunca fingir que são sempre 6.
+   */
+  calculateAverageMonthlyExpenses(data, monthsBack = 6) {
+    const historico = (data.historicoMensal || []).slice(-monthsBack);
+    if (!historico.length) return { average: null, monthsUsed: 0 };
+    return { average: sum(historico.map((h) => h.gastos)) / historico.length, monthsUsed: historico.length };
   },
   /**
    * Gera alertas com base nos dados reais e no histórico salvo — nunca
@@ -606,6 +687,17 @@ const Calc = {
         alerts.push({ id: 'variacao-potencial', icon: 'money_off', tipo: 'warning', texto: 'Sua capacidade potencial de investimento diminuiu em relação ao mês anterior.' });
       }
     }
+
+    this.calculateTopCategoryMovers(data, mes, 2).forEach((m) => {
+      if (Math.abs(m.deltaPercent) < 5) return; // variação pequena não é um insight relevante
+      const subiu = m.deltaPercent > 0;
+      alerts.push({
+        id: `mover-${m.categoria}`,
+        icon: subiu ? 'trending_up' : 'trending_down',
+        tipo: subiu ? 'warning' : 'success',
+        texto: `${m.categoria} ${subiu ? 'subiu' : 'caiu'} ${formatPercent(Math.abs(m.deltaPercent))} em relação ao mês anterior.`,
+      });
+    });
 
     if (!alerts.length) {
       alerts.push({ id: 'sem-alertas', icon: 'info', tipo: 'info', texto: 'Ainda não há alertas — eles aparecem conforme mais meses forem registrados no histórico.' });

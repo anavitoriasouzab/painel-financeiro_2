@@ -172,6 +172,9 @@ const SimpleCharts = {
    * (uma cor por item, ex.: categorias) ou `opts.color`/paleta padrão como
    * cor única (o destaque vem do tamanho da barra e da ordem). `opts.showPercent`
    * soma o valor de todos os itens e mostra a % de cada um sobre esse total.
+   * `item.icon` (nome de um Material Symbol) acrescenta um chip circular
+   * colorido antes do nome — mesma cor da barra, reforça a identidade visual
+   * de cada categoria também no ícone, não só no tamanho da barra.
    * As barras crescem de 0 até o valor final ao renderizar (`_animateFills`).
    */
   rankedList(containerId, items, opts = {}) {
@@ -181,15 +184,21 @@ const SimpleCharts = {
 
     const max = Math.max(...items.map((i) => i.valor), 0.0001);
     const total = opts.showPercent ? items.reduce((s, i) => s + (i.valor || 0), 0) : null;
+    const hasIcon = items.some((i) => i.icon);
     const rows = items.map((item, i) => {
       const color = item.color || opts.color || this.colorFor(0);
       const pct = total > 0 ? ` <span class="sc-ranked-pct">${((item.valor / total) * 100).toFixed(0)}%</span>` : '';
       const rank = opts.showRank ? `<span class="sc-ranked-rank">${i + 1}º</span>` : '';
+      const icon = hasIcon
+        ? `<span class="sc-ranked-icon" style="background:${this._rgba(color, 0.16)};color:${color}">${item.icon ? `<span class="material-symbols-outlined" aria-hidden="true">${item.icon}</span>` : ''}</span>`
+        : '';
       const width = Math.max((item.valor / max) * 100, 3);
       const gradient = `linear-gradient(90deg, ${this._shade(color, 0.35)}, ${color})`;
+      const rowClass = `sc-ranked-row${opts.showRank ? ' has-rank' : ''}${hasIcon ? ' has-icon' : ''}`;
       return `
-        <div class="sc-ranked-row${opts.showRank ? ' has-rank' : ''}">
+        <div class="${rowClass}">
           ${rank}
+          ${icon}
           <span class="sc-ranked-label">${escapeHtml(item.nome)}</span>
           <div class="sc-ranked-track"><div class="sc-ranked-fill" data-w="${width}" style="width:0%;background:${gradient};transition-delay:${i * 45}ms"></div></div>
           <span class="sc-ranked-value">${formatBRL(item.valor)}${pct}</span>
@@ -198,6 +207,14 @@ const SimpleCharts = {
     }).join('');
     container.innerHTML = `<div class="sc-ranked-wrap">${rows}</div>`;
     this._animateFills(container);
+  },
+
+  /** Converte hex pra "rgba(r,g,b,alpha)" — usado no fundo translúcido do chip de ícone (mesma cor da barra, só mais suave). */
+  _rgba(hex, alpha) {
+    const n = hex.replace('#', '');
+    const num = parseInt(n.length === 3 ? n.split('').map((c) => c + c).join('') : n, 16);
+    const r = (num >> 16) & 0xff, g = (num >> 8) & 0xff, b = num & 0xff;
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
   },
 
   /** Deixa as barras de preenchimento (largura em data-w, altura em data-h) crescerem de 0% até o valor final, em cascata. */
@@ -287,8 +304,8 @@ const SimpleCharts = {
 
     const uid = `scl${this._uid++}`;
     const hasOverlay = opts.pointLabels || opts.labelLastOnly || (opts.annotations && opts.annotations.length);
-    const w = 320, h = 150, padL = 8, padR = 8, padT = hasOverlay ? 34 : 14, padB = 10;
-    const allValues = series.flatMap((s) => s.data);
+    const w = 320, h = 150, padL = opts.showYAxis ? 34 : 8, padR = 8, padT = hasOverlay ? 34 : 14, padB = 10;
+    const allValues = series.flatMap((s) => s.data).concat((opts.referenceLines || []).map((r) => r.value));
     const max = Math.max(...allValues, 0);
     const min = Math.min(...allValues, 0);
     const range = (max - min) || 1;
@@ -298,6 +315,47 @@ const SimpleCharts = {
     const xFor = (i) => padL + i * xStep;
     const bottomY = h - padB;
 
+    // Eixo Y opcional: gridlines horizontais tracejadas + rótulos de valor à
+    // esquerda, em 4 níveis igualmente espaçados entre o mínimo e o máximo
+    // (incluindo o valor de eventuais referenceLines, já contado em min/max
+    // acima). Some sozinho (opts.showYAxis não informado) pros gráficos que
+    // já funcionam bem só com o eixo X, pra não sobrecarregar tudo de uma vez.
+    let yAxisGridSvg = '';
+    let yAxisLabelsHtml = '';
+    if (opts.showYAxis) {
+      const fmtY = opts.labelFormatter || ((v) => String(Math.round(v)));
+      const tickCount = 4;
+      for (let i = 0; i < tickCount; i++) {
+        const v = min + (range * i) / (tickCount - 1);
+        const y = yFor(v);
+        yAxisGridSvg += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${w - padR}" y2="${y.toFixed(1)}" stroke="var(--border)" stroke-width="1" stroke-dasharray="2 3" opacity="0.6"/>`;
+        yAxisLabelsHtml += `<span class="sc-line-ytick" style="top:${((y / h) * 100).toFixed(1)}%">${escapeHtml(fmtY(v))}</span>`;
+      }
+      // Linhas verticais só decorativas (grade completa, "papel quadriculado"),
+      // em posições fixas — não uma por ponto de dado, senão com muitos pontos
+      // (ex.: 30 dias) a grade vira uma poluição visual só de traços verticais.
+      const vLines = 5;
+      for (let i = 0; i <= vLines; i++) {
+        const x = padL + ((w - padL - padR) * i) / vLines;
+        yAxisGridSvg += `<line x1="${x.toFixed(1)}" y1="${padT}" x2="${x.toFixed(1)}" y2="${bottomY}" stroke="var(--border)" stroke-width="1" stroke-dasharray="2 3" opacity="0.4"/>`;
+      }
+    }
+
+    // Linhas de referência opcionais (opts.referenceLines: [{value, color, label}])
+    // — um teto/meta fixo pra comparar a série real com ele (ex.: renda do mês
+    // no Ritmo de gasto), sempre um valor real calculado por quem chama, nunca
+    // fabricado aqui.
+    let referenceLinesSvg = '';
+    let referenceLabelsHtml = '';
+    (opts.referenceLines || []).forEach((ref) => {
+      const y = yFor(ref.value);
+      const color = ref.color || 'var(--purple-500)';
+      referenceLinesSvg += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${w - padR}" y2="${y.toFixed(1)}" stroke="${color}" stroke-width="1.5" stroke-dasharray="5 4"/>`;
+      if (ref.label) {
+        referenceLabelsHtml += `<span class="sc-line-reference-label" style="top:${((y / h) * 100).toFixed(1)}%;color:${color}"><span class="material-symbols-outlined" aria-hidden="true">flag</span>${escapeHtml(ref.label)}</span>`;
+      }
+    });
+
     let defs = '';
     const allPts = [];
     const layers = series.map((s, si) => {
@@ -305,7 +363,10 @@ const SimpleCharts = {
       const pts = s.data.map((v, i) => [xFor(i), yFor(v)]);
       allPts[si] = pts;
       const linePath = opts.stepped ? this._stepPath(pts) : opts.monotone ? this._monotonePath(pts) : this._smoothPath(pts);
-      const dots = opts.hideDots ? '' : pts.map(([x, y]) => `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.5" fill="${color}"/>`).join('');
+      const dotHidden = s.hideDots != null ? s.hideDots : opts.hideDots;
+      const dotRadius = s.dotRadius || 2.5;
+      const dotOpacity = s.opacity != null ? ` fill-opacity="${s.opacity}"` : '';
+      const dots = dotHidden ? '' : pts.map(([x, y]) => `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${dotRadius}" fill="${color}"${dotOpacity}/>`).join('');
 
       let areaFill = '';
       if (series.length === 1 || s.fillArea) {
@@ -387,16 +448,25 @@ const SimpleCharts = {
       overlay = `<div class="sc-line-overlay">${labelsHtml}${annotationsHtml}</div>`;
     }
 
+    const yAxisOverlay = (yAxisLabelsHtml || referenceLabelsHtml)
+      ? `<div class="sc-line-overlay">${yAxisLabelsHtml}${referenceLabelsHtml}</div>`
+      : '';
+
     container.innerHTML = `
       <div class="sc-line-wrap">
         <div class="sc-line-plot">
-          <svg viewBox="0 0 ${w} ${h}" class="sc-line-svg" preserveAspectRatio="none" role="img" aria-label="Gráfico de linha"><defs>${defs}</defs>${zeroLine}${layers}</svg>
+          <svg viewBox="0 0 ${w} ${h}" class="sc-line-svg" preserveAspectRatio="none" role="img" aria-label="Gráfico de linha"><defs>${defs}</defs>${yAxisGridSvg}${referenceLinesSvg}${zeroLine}${layers}</svg>
+          ${yAxisOverlay}
           ${overlay}
         </div>
         <div class="sc-line-xlabels">${xLabels}</div>
       </div>
       ${legend}
     `;
+
+    if (opts.interactive !== false) {
+      this._attachLineHover(container, { xFor, allPts, series, labels, labelFormatter: opts.labelFormatter, w, h });
+    }
   },
 
   /**
@@ -633,6 +703,132 @@ const SimpleCharts = {
         </div>
       </div>
     `;
+  },
+
+  /**
+   * Calendário de gastos do mês — heatmap num único matiz (roxo). `days`:
+   * [{day, date:'AAAA-MM-DD', value}] para TODOS os dias do mês (o método
+   * descobre sozinho em que coluna/dia da semana cada um cai a partir de
+   * `date`). Nível 0 = sem gasto naquele dia — nunca inventamos
+   * intensidade; níveis 1-4 vêm de quartis dos dias com valor > 0.
+   * `opts.emptyMessage` substitui o grid por um estado vazio quando não há
+   * nenhum dia com gasto real lançado ainda.
+   */
+  heatmap(containerId, days, opts = {}) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    const list = days || [];
+    const withSpend = list.map((d) => d.value).filter((v) => v > 0).sort((a, b) => a - b);
+    if (!list.length || !withSpend.length) {
+      container.innerHTML = `<div class="empty-state-mini"><span class="material-symbols-outlined" aria-hidden="true">calendar_month</span><p>${escapeHtml(opts.emptyMessage || 'Sem dados para exibir ainda.')}</p></div>`;
+      return;
+    }
+
+    const thresholdAt = (p) => withSpend[Math.min(Math.floor(p * withSpend.length), withSpend.length - 1)];
+    const q1 = thresholdAt(0.25), q2 = thresholdAt(0.5), q3 = thresholdAt(0.75);
+    const levelFor = (v) => {
+      if (!v) return 0;
+      if (v <= q1) return 1;
+      if (v <= q2) return 2;
+      if (v <= q3) return 3;
+      return 4;
+    };
+
+    const [ano, mes] = list[0].date.split('-').map(Number);
+    const firstWeekday = new Date(ano, mes - 1, 1).getDay();
+    const leading = Array.from({ length: firstWeekday }, () => `<div class="sc-heatmap-cell is-empty"></div>`).join('');
+    const cells = list.map((d) => {
+      const level = levelFor(d.value);
+      const dataCurta = `${d.date.slice(8, 10)}/${d.date.slice(5, 7)}`;
+      const title = `${dataCurta} — ${d.value > 0 ? formatBRL(d.value) : 'sem gastos'}`;
+      return `<div class="sc-heatmap-cell" data-level="${level}" title="${escapeAttr(title)}"></div>`;
+    }).join('');
+
+    const weekdaysHtml = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((w) => `<span>${w}</span>`).join('');
+
+    container.innerHTML = `
+      <div class="sc-heatmap-wrap">
+        <div class="sc-heatmap-weekdays">${weekdaysHtml}</div>
+        <div class="sc-heatmap-grid">${leading}${cells}</div>
+        <div class="sc-heatmap-legend">Menos<div class="sc-heatmap-legend-scale"></div>Mais</div>
+      </div>
+    `;
+  },
+
+  /**
+   * Anexa hover interativo a um gráfico de linha já renderizado: linha-guia
+   * vertical + ponto destacado por série + tooltip com o valor de cada
+   * série no índice mais próximo do mouse. Convive com pointLabels/
+   * labelLastOnly/annotations (que continuam sempre visíveis) — é uma
+   * camada adicional, não substitui nada.
+   *
+   * IMPORTANTE: o SVG usa `preserveAspectRatio="none"` (viewBox 320×150
+   * abstrato, esticado via CSS pro tamanho real do container), então o
+   * mapeamento mouse→dado tem que sempre passar por `getBoundingClientRect()`
+   * do `.sc-line-plot` a cada evento — nunca assumir pixel 1:1 com o viewBox.
+   */
+  _attachLineHover(container, { xFor, allPts, series, labels, labelFormatter, w, h }) {
+    const plot = container.querySelector('.sc-line-plot');
+    if (!plot || labels.length < 2) return;
+    const fmt = labelFormatter || ((v) => String(Math.round(v)));
+    const n = labels.length;
+
+    const guide = document.createElement('div');
+    guide.className = 'sc-line-hover-guide';
+    plot.appendChild(guide);
+
+    const dots = series.map((s, si) => {
+      const dot = document.createElement('div');
+      dot.className = 'sc-line-hover-dot';
+      dot.style.background = s.color || this.colorFor(si);
+      plot.appendChild(dot);
+      return dot;
+    });
+
+    const tooltip = document.createElement('div');
+    tooltip.className = 'sc-line-tooltip';
+    plot.appendChild(tooltip);
+
+    const showAt = (i) => {
+      const xPct = (xFor(i) / w) * 100;
+      guide.style.left = `${xPct}%`;
+      dots.forEach((dot, si) => {
+        const pt = allPts[si][i];
+        if (!pt) { dot.style.opacity = '0'; return; }
+        dot.style.opacity = '1';
+        dot.style.left = `${(pt[0] / w) * 100}%`;
+        dot.style.top = `${(pt[1] / h) * 100}%`;
+      });
+
+      const rowsHtml = series.map((s, si) => {
+        const color = s.color || this.colorFor(si);
+        return `<div class="sc-line-tooltip-row"><span class="sc-dot" style="background:${color}"></span>${escapeHtml(s.name || '')}: ${escapeHtml(fmt(s.data[i]))}</div>`;
+      }).join('');
+      tooltip.innerHTML = `<div class="sc-line-tooltip-title">${escapeHtml(labels[i])}</div>${rowsHtml}`;
+
+      // Ancora pela direita perto da borda direita (mesma ideia de hAnchor,
+      // usada nos rótulos estáticos) pra tooltip nunca vazar pra fora do card.
+      if (xPct > 70) { tooltip.style.left = 'auto'; tooltip.style.right = `${(100 - xPct).toFixed(1)}%`; tooltip.style.transform = 'translate(0, -100%)'; }
+      else if (xPct < 15) { tooltip.style.right = 'auto'; tooltip.style.left = `${xPct.toFixed(1)}%`; tooltip.style.transform = 'translate(0, -100%)'; }
+      else { tooltip.style.right = 'auto'; tooltip.style.left = `${xPct.toFixed(1)}%`; tooltip.style.transform = 'translate(-50%, -100%)'; }
+      const topPts = allPts.map((pts) => pts[i]).filter(Boolean);
+      const yTop = topPts.length ? Math.min(...topPts.map((p) => p[1])) : 0;
+      tooltip.style.top = `${Math.max(((yTop / h) * 100) - 6, 2)}%`;
+    };
+
+    const indexFromClientX = (clientX) => {
+      const rect = plot.getBoundingClientRect();
+      const frac = Math.min(Math.max((clientX - rect.left) / rect.width, 0), 1);
+      return Math.round(frac * (n - 1));
+    };
+    const onMove = (clientX) => { plot.classList.add('is-hovering'); showAt(indexFromClientX(clientX)); };
+    const onLeave = () => plot.classList.remove('is-hovering');
+
+    plot.addEventListener('mousemove', (e) => onMove(e.clientX));
+    plot.addEventListener('mouseleave', onLeave);
+    plot.addEventListener('touchstart', (e) => { if (e.touches[0]) onMove(e.touches[0].clientX); }, { passive: true });
+    plot.addEventListener('touchmove', (e) => { if (e.touches[0]) onMove(e.touches[0].clientX); }, { passive: true });
+    plot.addEventListener('touchend', onLeave);
   },
 };
 
