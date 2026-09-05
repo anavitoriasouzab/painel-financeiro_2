@@ -1,4 +1,4 @@
--<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 
 <head>
@@ -27,6 +27,8 @@
 </head>
 
 <body>
+
+  <canvas class="app-shader-canvas shader-canvas" aria-hidden="true"></canvas>
 
   <div class="app-shell">
 
@@ -84,10 +86,10 @@
       </div>
 
       <div class="side-section side-section-highlight" id="sidebar-reminders-section" style="display:none;">
-        <div class="side-section-title">Lembretes <span class="side-reminder-count" id="sidebar-reminder-count"></span>
+        <div class="side-section-title"><span class="material-symbols-outlined" aria-hidden="true">notifications</span>Lembretes <span class="side-reminder-count" id="sidebar-reminder-count"></span>
         </div>
         <div id="sidebar-reminders-list"></div>
-        <button class="side-see-all" onclick="navigateTo('analises')">Ver mais →</button>
+        <button class="side-see-all" onclick="navigateTo('analises')">Ver todos os lembretes →</button>
       </div>
 
       <div class="side-footer">
@@ -209,7 +211,7 @@
               <div class="value" id="stat-reserva">—</div>
               <div class="sub" id="stat-reserva-sub"></div>
             </div>
-            <div class="stat-card wide">
+            <div class="stat-card wide card-solid">
               <div class="label">Potencial de investimento <span class="badge purple" id="stat-potencial-perfil-badge"
                   style="display:none;"></span></div>
               <div class="value" id="stat-potencial">—</div>
@@ -224,10 +226,11 @@
 
             <div class="raiox-card span-8">
               <div class="raiox-header">
-                <div class="raiox-title">Renda comprometida</div>
+                <div class="raiox-title"><span class="material-symbols-outlined" id="raiox-icon" aria-hidden="true">trending_up</span>Renda comprometida</div>
                 <div class="raiox-total" id="raiox-gasto-total"></div>
               </div>
               <div id="raiox-gauge"></div>
+              <div class="raiox-legend" id="raiox-legend"></div>
               <div class="raiox-message" id="raiox-message"></div>
             </div>
             <div class="card span-4">
@@ -315,26 +318,27 @@
           <div class="section-title" style="margin-top:0;">Resumo do mês</div>
           <div class="stat-grid">
             <div class="stat-card">
-              <div class="label">Total de entradas</div>
+              <div class="label"><span class="stat-icon-chip success"><span class="material-symbols-outlined" aria-hidden="true">arrow_upward</span></span>Total de entradas</div>
               <div class="value" id="analises-resumo-entradas">—</div>
             </div>
             <div class="stat-card">
-              <div class="label">Total de despesas</div>
+              <div class="label"><span class="stat-icon-chip danger"><span class="material-symbols-outlined" aria-hidden="true">arrow_downward</span></span>Total de despesas</div>
               <div class="value" id="analises-resumo-despesas">—</div>
             </div>
             <div class="stat-card">
-              <div class="label">Saldo</div>
+              <div class="label"><span class="stat-icon-chip purple"><span class="material-symbols-outlined" aria-hidden="true">account_balance_wallet</span></span>Saldo</div>
               <div class="value" id="analises-resumo-saldo">—</div>
             </div>
             <div class="stat-card">
-              <div class="label">Média de gastos</div>
+              <div class="label"><span class="stat-icon-chip neutral"><span class="material-symbols-outlined" aria-hidden="true">bar_chart</span></span>Média de gastos</div>
               <div class="value" id="analises-resumo-media">—</div>
               <div class="sub" id="analises-resumo-media-sub"></div>
             </div>
-            <div class="stat-card wide">
-              <div class="label">Variação vs. mês anterior</div>
-              <div id="analises-resumo-variacao" style="margin-top:6px;"></div>
-            </div>
+          </div>
+
+          <div class="card" style="margin-top:12px;">
+            <div class="label">Variação vs. mês anterior</div>
+            <div id="analises-resumo-variacao" style="margin-top:8px;"></div>
           </div>
 
           <!-- Projeção do próximo mês: mesmo cálculo (Calc.calculateNextMonthProjection)
@@ -343,8 +347,11 @@
                mesmo tempo, só uma visível por vez). -->
           <div class="section-title">Próximo mês</div>
           <div class="card">
-            <div class="month" id="analises-next-month-label" style="font-size:16px;margin-bottom:10px;">—</div>
-            <div class="stat-grid" style="grid-template-columns:1fr 1fr;">
+            <div class="next-month-header">
+              <div class="month" id="analises-next-month-label" style="font-size:16px;">—</div>
+              <span class="badge purple next-month-badge"><span class="material-symbols-outlined" aria-hidden="true">info</span>Estimativa</span>
+            </div>
+            <div class="stat-grid" style="grid-template-columns:1fr 1fr;margin-top:12px;">
               <div class="stat-card">
                 <div class="label">Renda prevista</div>
                 <div class="value" id="analises-next-month-renda">—</div>
@@ -352,12 +359,13 @@
               <div class="stat-card">
                 <div class="label">Gastos previstos</div>
                 <div class="value" id="analises-next-month-gastos">—</div>
+                <div class="progress-track" style="margin-top:8px;"><div class="progress-fill danger" id="analises-next-month-progress-fill" style="width:0%;"></div></div>
                 <div class="sub" id="analises-next-month-percentual"></div>
               </div>
-              <div class="stat-card wide">
-                <div class="label">Saldo estimado</div>
-                <div class="value" id="analises-next-month-saldo">—</div>
-              </div>
+            </div>
+            <div class="next-month-total-row">
+              <span>Saldo estimado</span>
+              <strong id="analises-next-month-saldo">—</strong>
             </div>
             <div class="notice-card info" style="margin-top:12px;" id="analises-next-month-obs"></div>
           </div>
@@ -384,7 +392,7 @@
               <div id="chart-categoria" class="sc-container"></div>
             </div>
 
-            <div class="card span-12">
+            <div class="card card-solid span-12">
               <div class="chart-mini-title"><span class="material-symbols-outlined" aria-hidden="true">compare_arrows</span>Comparar dois meses</div>
               <div class="field-row">
                 <div class="field"><label>Mês A</label><select id="compare-month-a"
@@ -396,30 +404,27 @@
               <div id="compare-result"></div>
             </div>
 
-            <div class="section-title span-12">Insights financeiros</div>
-            <div class="span-12"><div id="alerts-list" class="notice-stack"></div></div>
-
-            <div class="card chart-card span-12" id="analises-ritmo-gasto-section" style="display:none;">
-              <div class="chart-mini-title"><span class="material-symbols-outlined" aria-hidden="true">speed</span>Ritmo de gasto</div>
-              <div id="chart-ritmo-gasto" class="sc-container"></div>
-            </div>
-
             <div class="span-12">
               <div class="duo-grid">
                 <div class="card chart-mini-card">
                   <div class="chart-mini-title"><span class="material-symbols-outlined" aria-hidden="true" style="color:var(--danger)">bar_chart</span>Maiores despesas</div>
                   <div id="chart-detalhamento" class="sc-container"></div>
                 </div>
-                <div class="card chart-mini-card">
-                  <div class="chart-mini-title"><span class="material-symbols-outlined" aria-hidden="true" style="color:var(--danger)">stacked_bar_chart</span>Fluxo financeiro</div>
-                  <div id="chart-fluxo-financeiro" class="sc-container"></div>
+                <div class="card chart-mini-card" id="investimento-evolucao-wrap">
+                  <div class="chart-mini-title"><span class="material-symbols-outlined" aria-hidden="true" style="color:var(--success)">savings</span>Evolução da capacidade de investimento</div>
+                  <div id="chart-investimento-evolucao" class="sc-container"></div>
                 </div>
               </div>
             </div>
 
-            <div class="card chart-card span-12" id="investimento-evolucao-wrap">
-              <div class="chart-mini-title"><span class="material-symbols-outlined" aria-hidden="true" style="color:var(--success)">savings</span>Evolução da capacidade de investimento</div>
-              <div id="chart-investimento-evolucao" class="sc-container"></div>
+            <div class="card chart-card reserva-card span-6">
+              <div class="chart-mini-title"><span class="material-symbols-outlined" aria-hidden="true">shield</span>Meta de reserva de emergência</div>
+              <div id="chart-reserva-emergencia" class="sc-container"></div>
+            </div>
+
+            <div class="card chart-card span-6">
+              <div class="chart-mini-title"><span class="material-symbols-outlined" aria-hidden="true" style="color:var(--danger)">stacked_bar_chart</span>Fluxo financeiro</div>
+              <div id="chart-fluxo-financeiro" class="sc-container"></div>
             </div>
 
             <div class="card span-12" style="overflow-x:auto;">
@@ -440,6 +445,9 @@
                 onclick="Charts.saveCurrentSnapshot()">Salvar mês atual no histórico</button>
             </div>
 
+            <div class="section-title span-12">Insights financeiros</div>
+            <div class="span-12"><div id="alerts-list" class="notice-stack"></div></div>
+
           </div>
 
         </section>
@@ -449,8 +457,11 @@
 
           <div class="section-title" style="margin-top:0;">Próximo mês</div>
           <div class="card">
-            <div class="month" id="next-month-label" style="font-size:16px;margin-bottom:10px;">—</div>
-            <div class="stat-grid" style="grid-template-columns:1fr 1fr;">
+            <div class="next-month-header">
+              <div class="month" id="next-month-label" style="font-size:16px;">—</div>
+              <span class="badge purple next-month-badge"><span class="material-symbols-outlined" aria-hidden="true">info</span>Estimativa</span>
+            </div>
+            <div class="stat-grid" style="grid-template-columns:1fr 1fr;margin-top:12px;">
               <div class="stat-card">
                 <div class="label">Renda prevista</div>
                 <div class="value" id="next-month-renda">—</div>
@@ -458,12 +469,13 @@
               <div class="stat-card">
                 <div class="label">Gastos previstos</div>
                 <div class="value" id="next-month-gastos">—</div>
+                <div class="progress-track" style="margin-top:8px;"><div class="progress-fill danger" id="next-month-progress-fill" style="width:0%;"></div></div>
                 <div class="sub" id="next-month-percentual"></div>
               </div>
-              <div class="stat-card wide">
-                <div class="label">Saldo estimado</div>
-                <div class="value" id="next-month-saldo">—</div>
-              </div>
+            </div>
+            <div class="next-month-total-row">
+              <span>Saldo estimado</span>
+              <strong id="next-month-saldo">—</strong>
             </div>
             <div class="notice-card info" style="margin-top:12px;" id="next-month-obs"></div>
           </div>
@@ -501,8 +513,8 @@
           </div>
           <div id="goals-list" class="accounts-list"></div>
 
-          <div class="section-title">E se eu investir?</div>
-          <div class="card">
+          <div class="section-title"><span class="material-symbols-outlined" aria-hidden="true">calculate</span>Simulador · E se eu investir?</div>
+          <div class="simulator-card">
             <div class="field-row">
               <div class="field"><label for="sim-valor">Valor mensal (R$)</label><input id="sim-valor" type="number"
                   step="0.01" min="0" placeholder="Ex.: 300" /></div>
@@ -520,8 +532,8 @@
               rentabilidade é assumida.</p>
           </div>
 
-          <div class="section-title">Quanto preciso guardar por mês?</div>
-          <div class="card">
+          <div class="section-title"><span class="material-symbols-outlined" aria-hidden="true">calculate</span>Simulador · Quanto preciso guardar por mês?</div>
+          <div class="simulator-card">
             <div class="field-row">
               <div class="field"><label for="inv-valor-alvo">Valor-alvo (R$)</label><input id="inv-valor-alvo"
                   type="number" step="0.01" min="0" placeholder="Ex.: 7000" /></div>
@@ -534,8 +546,8 @@
             <div id="inv-result" style="margin-top:10px;"></div>
           </div>
 
-          <div class="section-title">Posso fazer este gasto?</div>
-          <div class="card">
+          <div class="section-title"><span class="material-symbols-outlined" aria-hidden="true">calculate</span>Simulador · Posso fazer este gasto?</div>
+          <div class="simulator-card">
             <div class="field"><label for="spend-valor">Valor do gasto (R$)</label><input id="spend-valor" type="number"
                 step="0.01" min="0" placeholder="Ex.: 250" /></div>
             <button class="secondary-btn" style="width:100%;" onclick="SpendCheck.run()">Analisar</button>
@@ -546,8 +558,11 @@
 
           <div class="section-title">Virada do mês</div>
           <div class="card">
-            <p class="muted-text" style="margin-bottom:12px;">Ao virar o mês: o mês atual é arquivado no histórico, as
-              parcelas avançam (as que terminam somem), e as contas recorrentes voltam a ficar "Pendente".</p>
+            <div class="notice-card warning turn-month-warning" style="margin-bottom:12px;">
+              <span class="material-symbols-outlined" aria-hidden="true">warning</span>
+              <div class="notice-card-text">Arquiva o mês atual no histórico, avança as parcelas em aberto e volta as
+                contas recorrentes para "Pendente". Não pode ser desfeito.</div>
+            </div>
             <button class="primary-btn" style="width:100%;" onclick="Planning.turnMonth()">Virar para o próximo
               mês</button>
           </div>
@@ -593,32 +608,6 @@
           <div class="section-title">Minhas metas</div>
           <div class="card" id="profile-goals-summary"></div>
 
-          <div class="section-title">Reserva de emergência</div>
-          <div class="card settings-card">
-            <p class="muted-text" style="margin-bottom:10px;">Recomendado: 3 a 6 meses do seu custo de vida guardados.
-            </p>
-            <div class="field-checkbox" style="margin-bottom:10px;">
-              <label><input type="checkbox" id="reserva-possui" onchange="Profile.toggleReservaFields()" /> Já tenho uma
-                reserva de emergência</label>
-            </div>
-            <div id="reserva-fields" style="display:none;">
-              <div class="field-row">
-                <div class="field"><label for="reserva-valor-atual">Valor guardado hoje (R$)</label><input
-                    id="reserva-valor-atual" type="number" min="0" step="0.01" placeholder="0.00" /></div>
-                <div class="field"><label for="reserva-meta-valor">Meta (R$)</label><input id="reserva-meta-valor"
-                    type="number" min="0" step="0.01" placeholder="0.00" /></div>
-              </div>
-              <div class="field"><label for="reserva-valor-mensal">Aporte mensal (R$)</label><input
-                  id="reserva-valor-mensal" type="number" min="0" step="0.01" placeholder="0.00" /></div>
-              <div class="progress-track">
-                <div class="progress-fill" id="reserva-progress-fill" style="width:0%;"></div>
-              </div>
-              <div class="goal-progress-meta"><span id="reserva-progress-label">—</span><span
-                  id="reserva-meses-label">—</span></div>
-            </div>
-            <button class="primary-btn save-btn-compact" onclick="Profile.saveReserva()">Salvar</button>
-          </div>
-
           <div class="section-title">Configurações — Limite de renda comprometida</div>
           <div class="card settings-card">
             <p class="muted-text" style="margin-bottom:10px;">Máximo da renda que pode ser comprometido — o app avisa
@@ -663,12 +652,6 @@
               relatório mensal</button>
             <button class="mini-btn danger" style="width:100%;justify-content:center;"
               onclick="Backup.deleteAllData()">Excluir todos os dados</button>
-          </div>
-
-          <div class="section-title">Conta</div>
-          <div class="card">
-            <p class="muted-text" style="margin-bottom:12px;">Logada(o) como <strong id="account-email">—</strong></p>
-            <button class="secondary-btn" style="width:100%;" id="account-logout-btn">Sair da conta</button>
           </div>
         </section>
 
@@ -1064,6 +1047,60 @@
     </div>
   </div>
 
+  <!-- Modal: definir/editar a meta de reserva de emergência (substitui o
+     formulário que antes ficava sempre visível no card de Perfil). -->
+  <div class="modal-overlay" id="reserva-modal" role="dialog" aria-modal="true" aria-labelledby="reserva-form-title">
+    <div class="modal-sheet">
+      <div class="modal-header">
+        <h3 id="reserva-form-title">Meta de reserva de emergência</h3>
+        <button class="icon-btn" id="reserva-close-btn" aria-label="Fechar formulário de reserva de emergência"><svg
+            viewBox="0 -960 960 960" width="16" height="16" fill="currentColor">
+            <path
+              d="m249-207-42-42 231-231-231-231 42-42 231 231 231-231 42 42-231 231 231 231-42 42-231-231-231 231Z" />
+          </svg></button>
+      </div>
+      <p class="muted-text" style="margin-bottom:12px;">Recomendado: 3 a 6 meses do seu custo de vida guardados.</p>
+      <form id="reserva-form">
+        <div class="field-row">
+          <div class="field"><label for="reserva-valor-atual">Valor guardado hoje (R$)</label><input
+              id="reserva-valor-atual" type="number" min="0" step="0.01" placeholder="0.00" /></div>
+          <div class="field"><label for="reserva-meta-valor">Meta (R$)</label><input id="reserva-meta-valor"
+              type="number" min="0" step="0.01" placeholder="0.00" required /></div>
+        </div>
+        <div class="field"><label for="reserva-valor-mensal">Aporte mensal (R$)</label><input
+            id="reserva-valor-mensal" type="number" min="0" step="0.01" placeholder="0.00" /></div>
+        <div class="modal-actions">
+          <button type="button" class="mini-btn danger" id="reserva-remove-btn" style="display:none;margin-right:auto;">Remover meta</button>
+          <button type="button" class="secondary-btn" id="reserva-cancel-btn">Cancelar</button>
+          <button type="submit" class="primary-btn">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: registrar rapidamente o valor guardado hoje na reserva (sem
+     precisar abrir o formulário completo de meta/aporte mensal). -->
+  <div class="modal-overlay" id="reserva-valor-modal" role="dialog" aria-modal="true" aria-labelledby="reserva-valor-form-title">
+    <div class="modal-sheet">
+      <div class="modal-header">
+        <h3 id="reserva-valor-form-title">Registrar valor guardado</h3>
+        <button class="icon-btn" id="reserva-valor-close-btn" aria-label="Fechar formulário de valor guardado"><svg
+            viewBox="0 -960 960 960" width="16" height="16" fill="currentColor">
+            <path
+              d="m249-207-42-42 231-231-231-231 42-42 231 231 231-231 42 42-231 231 231 231-42 42-231-231-231 231Z" />
+          </svg></button>
+      </div>
+      <form id="reserva-valor-form">
+        <div class="field"><label for="reserva-valor-novo">Valor guardado hoje (R$)</label><input
+            id="reserva-valor-novo" type="number" min="0" step="0.01" placeholder="0.00" required /></div>
+        <div class="modal-actions">
+          <button type="button" class="secondary-btn" id="reserva-valor-cancel-btn">Cancelar</button>
+          <button type="submit" class="primary-btn">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- Modal de confirmação genérico do app (substitui confirm()/alert() nativos
      do navegador) — usado pelo aviso de limite de renda comprometida e por
      qualquer ação destrutiva (excluir dados, excluir conta, virar o mês etc). -->
@@ -1134,6 +1171,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <script src="js/supabase-config.js"></script>
+  <script src="js/shader-background.js"></script>
   <script src="js/simplecharts.js"></script>
   <script src="js/storage.js"></script>
   <script src="js/calculations.js"></script>

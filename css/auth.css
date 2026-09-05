@@ -21,16 +21,18 @@ body.auth-body {
     radial-gradient(120% 100% at 18% -8%, #2C2050 0%, #170F2B 42%, #0A0714 100%);
 }
 
-/* Rede de partículas à deriva no fundo do login — canvas puro (ver
-   js/auth-particles.js): nós descem devagar, feixes de luz sobem rápido,
-   linhas conectam nós próximos entre si e, em dispositivos com mouse de
-   verdade, com o cursor. O próprio script pausa a animação com
-   prefers-reduced-motion (desenha só uma cena parada). */
-.auth-particles-canvas {
+/* Fundo animado do login — shader WebGL de ruído orgânico (ver
+   js/shader-background.js), paleta roxa (mesma família do botão de entrar e da
+   marca, ver .auth-submit/.auth-brand abaixo). O próprio script pausa a
+   animação com prefers-reduced-motion (desenha só um frame parado). */
+.auth-shader-canvas {
   position: absolute;
   inset: 0;
+  width: 100%;
+  height: 100%;
   z-index: -1;
   pointer-events: none;
+  display: block;
 }
 
 .auth-brand {
@@ -75,10 +77,12 @@ body.auth-body {
   border-radius: var(--radius-lg);
   padding: 36px 32px;
   box-shadow: 0 24px 55px -18px rgba(10, 7, 20, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.5);
-  /* Blur bem leve — deixa a rede de partículas do fundo
-     (js/auth-particles.js) quase nítida através do card. */
-  backdrop-filter: blur(3px) saturate(120%);
-  -webkit-backdrop-filter: blur(3px) saturate(120%);
+  /* Blur mais forte que antes — o shader de fundo (js/shader-background.js) é bem
+     mais denso/colorido que a antiga rede de partículas esparsas, então
+     precisa de mais blur atrás do card pra não brigar com a leitura do
+     formulário. */
+  backdrop-filter: blur(18px) saturate(120%);
+  -webkit-backdrop-filter: blur(18px) saturate(120%);
 }
 
 [data-theme="dark"] .auth-card {

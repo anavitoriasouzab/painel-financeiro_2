@@ -166,6 +166,81 @@ const SimpleCharts = {
   },
 
   /**
+   * Barras pra comparar a MESMA métrica em dois (ou mais) pontos no tempo
+   * (ex.: "Comparar dois meses") — diferente de `bar()`, que usa uma cor da
+   * paleta por barra (pensado pra categorias diferentes). Aqui as barras
+   * são um só matiz em duas tonalidades (mês mais antigo mais claro, mais
+   * recente mais escuro — `opts.colors` default `[--purple-500,
+   * --purple-700]`), preenchimento sólido (sem gradiente decorativo), topo
+   * arredondado/base reta, com eixo Y (grade + valores formatados) e
+   * tooltip ao passar o mouse/tocar mostrando o valor EXATO — o mesmo
+   * `opts.valueFormatter` (default `formatBRL`) usado pela tabela de
+   * detalhamento logo abaixo no card, pra nunca mostrar um número
+   * arredondado ali e o exato aqui.
+   */
+  comparisonBars(containerId, opts) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    const { labels, values } = opts;
+    if (!values || values.length < 2 || values.every((v) => !v)) return this._empty(container);
+
+    const fmt = opts.valueFormatter || formatBRL;
+    const w = 320, h = 150, padL = 46, padR = 8, padT = 14, padB = 20;
+    const plotW = w - padL - padR;
+    const plotH = h - padT - padB;
+    const bottomY = h - padB;
+    const max = Math.max(...values, 0.0001);
+    const n = values.length;
+    const gap = plotW / n;
+    const barW = Math.min(gap * 0.32, 44);
+    const yFor = (v) => padT + plotH * (1 - v / max);
+    const colors = opts.colors || ['var(--purple-500)', 'var(--purple-700)'];
+
+    const tickCount = 4;
+    let gridSvg = '';
+    let yLabelsHtml = '';
+    for (let i = 0; i < tickCount; i++) {
+      const v = (max * i) / (tickCount - 1);
+      const y = yFor(v);
+      gridSvg += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${w - padR}" y2="${y.toFixed(1)}" stroke="var(--border)" stroke-width="1" stroke-dasharray="2 3" opacity="0.6"/>`;
+      yLabelsHtml += `<span class="sc-line-ytick" style="top:${((y / h) * 100).toFixed(1)}%">${escapeHtml(fmt(v))}</span>`;
+    }
+
+    const barRadius = 6;
+    const barsSvg = values.map((v, i) => {
+      const x = padL + gap * i + (gap - barW) / 2;
+      const y = yFor(v);
+      const r = Math.min(barRadius, Math.max(bottomY - y, 0) / 2);
+      // Retângulo com cantos arredondados só no topo (SVG <rect rx> arredonda
+      // os 4 cantos igual — sem controle por canto — por isso é um <path>).
+      const path = r > 0
+        ? `M ${x.toFixed(1)},${bottomY} L ${x.toFixed(1)},${(y + r).toFixed(1)} Q ${x.toFixed(1)},${y.toFixed(1)} ${(x + r).toFixed(1)},${y.toFixed(1)} L ${(x + barW - r).toFixed(1)},${y.toFixed(1)} Q ${(x + barW).toFixed(1)},${y.toFixed(1)} ${(x + barW).toFixed(1)},${(y + r).toFixed(1)} L ${(x + barW).toFixed(1)},${bottomY} Z`
+        : `M ${x.toFixed(1)},${bottomY} L ${x.toFixed(1)},${bottomY} Z`;
+      return `<path class="sc-cbar-bar" data-index="${i}" d="${path}" fill="${colors[i % colors.length]}"/>`;
+    }).join('');
+
+    const xLabels = labels.map((l) => `<span>${escapeHtml(l)}</span>`).join('');
+
+    container.innerHTML = `
+      <div class="sc-cbar-wrap">
+        <div class="sc-cbar-plot">
+          <svg viewBox="0 0 ${w} ${h}" class="sc-cbar-svg" preserveAspectRatio="none" role="img" aria-label="${escapeAttr(opts.ariaLabel || 'Gráfico de barras comparando dois meses')}">${gridSvg}${barsSvg}</svg>
+          <div class="sc-line-overlay">${yLabelsHtml}</div>
+          <div class="sc-cbar-tooltip"></div>
+        </div>
+        <div class="sc-cbar-xlabels">${xLabels}</div>
+      </div>
+    `;
+    this._attachBarHover(container, {
+      values,
+      fmt,
+      h,
+      barCentersPct: values.map((v, i) => ((padL + gap * i + gap / 2) / w) * 100),
+      barTopsPct: values.map((v) => (yFor(v) / h) * 100),
+    });
+  },
+
+  /**
    * Lista ranqueada (maior pro menor) com barra proporcional — estilo
    * "Detalhamento de Despesas": um item por linha, nome à esquerda, barra
    * no meio, valor à direita. Cada barra usa `item.color` se informado
@@ -293,6 +368,121 @@ const SimpleCharts = {
   },
 
   /**
+   * Anel de progresso único, maior que os mini-anéis de miniRingGroup —
+   * usado onde faz sentido destacar um só percentual sobre um card (ex.:
+   * meta de reserva de emergência), sem o contexto extra do medidor
+   * semicircular (.gauge). Trilha de fundo sólida e fina; o traço de
+   * progresso aceita uma cor única (opts.color) ou um gradiente diagonal de
+   * duas cores (opts.gradient: [de, para]).
+   *
+   * A animação (anel enchendo do zero + número central contando) não roda
+   * só uma vez: um IntersectionObserver replay a cada vez que o anel entra
+   * de novo na viewport (ex.: usuária rola a página, sai da área do card e
+   * volta) — ele reseta pro estado vazio quando sai de vista, pra sempre
+   * ter algo pra animar na próxima entrada. Respeita prefers-reduced-motion
+   * (mostra o valor final direto, sem animação nem replay).
+   * opts: { pct, centerValue?, ariaLabel?, color?, gradient?, size?, radius?, strokeWidth?, trackColor? }
+   */
+  progressRing(containerId, opts = {}) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    const pct = Math.max(0, Math.min(opts.pct || 0, 100));
+    const size = opts.size || 148, r = opts.radius || 60, stroke = opts.strokeWidth || 14, cx = size / 2, cy = size / 2;
+    const trackColor = opts.trackColor || 'var(--border)';
+    const circumference = 2 * Math.PI * r;
+    const targetOffset = circumference - (pct / 100) * circumference;
+    const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const animateNumber = opts.centerValue == null;
+    const finalLabel = opts.centerValue != null ? opts.centerValue : `${Math.round(pct)}%`;
+
+    let strokePaint = opts.color || 'var(--purple-500)';
+    let gradientDefs = '';
+    if (opts.gradient && opts.gradient.length === 2) {
+      const gradId = `sc-ring-g${this._uid++}`;
+      gradientDefs = `<linearGradient id="${gradId}" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="${opts.gradient[0]}"/><stop offset="100%" stop-color="${opts.gradient[1]}"/></linearGradient>`;
+      strokePaint = `url(#${gradId})`;
+    }
+
+    // Cada render troca o conteúdo do container inteiro — sem desconectar,
+    // o observer da renderização anterior ficaria preso a um <circle> que
+    // não existe mais no DOM.
+    if (container._ringObserver) { container._ringObserver.disconnect(); container._ringObserver = null; }
+
+    container.innerHTML = `
+      <div class="sc-progress-ring-wrap" style="width:${size}px;height:${size}px;">
+        <svg viewBox="0 0 ${size} ${size}" class="sc-progress-ring-svg" role="img" aria-label="${escapeAttr(opts.ariaLabel || finalLabel)}">
+          ${gradientDefs ? `<defs>${gradientDefs}</defs>` : ''}
+          <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${trackColor}" stroke-width="${stroke}"/>
+          <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${strokePaint}" stroke-width="${stroke}" stroke-linecap="round" class="sc-progress-ring-fill" stroke-dasharray="${circumference.toFixed(2)} ${circumference.toFixed(2)}" stroke-dashoffset="${circumference.toFixed(2)}" transform="rotate(-90 ${cx} ${cy})"/>
+        </svg>
+        <div class="sc-progress-ring-center">
+          <span class="sc-progress-ring-value">${escapeHtml(reduceMotion || !animateNumber ? finalLabel : '0%')}</span>
+          ${opts.centerSub ? `<span class="sc-progress-ring-sub">${escapeHtml(opts.centerSub)}</span>` : ''}
+        </div>
+      </div>
+    `;
+
+    const wrap = container.querySelector('.sc-progress-ring-wrap');
+    const fillCircle = container.querySelector('.sc-progress-ring-fill');
+    const valueEl = container.querySelector('.sc-progress-ring-value');
+
+    if (reduceMotion) {
+      if (fillCircle) fillCircle.style.strokeDashoffset = targetOffset.toFixed(2);
+      return;
+    }
+
+    const playIn = () => {
+      if (fillCircle) {
+        // Duas rAF encadeadas: a primeira só garante que o navegador já
+        // pintou o offset vazio (definido acima) antes de trocar pro valor
+        // final — sem isso as duas mudanças de estilo caem no mesmo frame
+        // e a transição CSS não dispara.
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            fillCircle.style.strokeDashoffset = targetOffset.toFixed(2);
+          });
+        });
+      }
+      if (animateNumber && valueEl) {
+        const duration = 1200;
+        const start = performance.now();
+        const ease = (t) => 1 - Math.pow(1 - t, 3);
+        const step = (now) => {
+          const t = Math.min((now - start) / duration, 1);
+          valueEl.textContent = `${Math.round(pct * ease(t))}%`;
+          if (t < 1) requestAnimationFrame(step);
+        };
+        requestAnimationFrame(step);
+      }
+    };
+
+    // Volta pro estado "vazio" sem transição (troca temporariamente pra
+    // "none" e força o navegador a recalcular o layout com getBoundingClientRect
+    // antes de restaurar) — sem isso a próxima entrada na viewport animaria
+    // a partir do valor cheio de volta pro vazio, ao contrário do efeito
+    // pedido.
+    const resetOut = () => {
+      if (fillCircle) {
+        fillCircle.style.transition = 'none';
+        fillCircle.style.strokeDashoffset = circumference.toFixed(2);
+        fillCircle.getBoundingClientRect();
+        fillCircle.style.transition = '';
+      }
+      if (animateNumber && valueEl) valueEl.textContent = '0%';
+    };
+
+    if (wrap && window.IntersectionObserver) {
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => (entry.isIntersecting ? playIn() : resetOut()));
+      }, { threshold: 0.3 });
+      observer.observe(wrap);
+      container._ringObserver = observer;
+    } else {
+      playIn();
+    }
+  },
+
+  /**
    * Gráfico de linha (uma ou mais séries). opts: { labels, series: [{name, data, color}] }
    */
   line(containerId, opts) {
@@ -358,6 +548,7 @@ const SimpleCharts = {
 
     let defs = '';
     const allPts = [];
+    let endDotsOverlay = '';
     const layers = series.map((s, si) => {
       const color = s.color || this.colorFor(si);
       const pts = s.data.map((v, i) => [xFor(i), yFor(v)]);
@@ -366,7 +557,26 @@ const SimpleCharts = {
       const dotHidden = s.hideDots != null ? s.hideDots : opts.hideDots;
       const dotRadius = s.dotRadius || 2.5;
       const dotOpacity = s.opacity != null ? ` fill-opacity="${s.opacity}"` : '';
-      const dots = dotHidden ? '' : pts.map(([x, y]) => `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${dotRadius}" fill="${color}"${dotOpacity}/>`).join('');
+      // Com opts.emphasizeLastDot os dois pontos de ponta (primeiro/último)
+      // saem daqui e viram overlay HTML (ver endDotsHtml) — não fica só o
+      // último de fora porque, com preserveAspectRatio="none" (gráfico bem
+      // mais largo que alto, como o de "Potencial de investimento"), um
+      // <circle> do SVG estica proporcionalmente diferente no x e no y e
+      // vira uma elipse, não um círculo. Um <div> com width/height fixos em
+      // CSS não sofre esse esticamento (mesmo truque de .sc-line-hover-dot).
+      const skipEndDots = opts.emphasizeLastDot && pts.length;
+      const dots = dotHidden ? '' : pts.map(([x, y], i) => {
+        if (skipEndDots && (i === 0 || i === pts.length - 1)) return '';
+        return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${dotRadius}" fill="${color}"${dotOpacity}/>`;
+      }).join('');
+      if (skipEndDots) {
+        endDotsOverlay += [0, pts.length - 1].map((i) => {
+          const [x, y] = pts[i];
+          const isLast = i === pts.length - 1;
+          const size = isLast ? 12 : 6;
+          return `<span class="sc-line-end-dot" style="left:${((x / w) * 100).toFixed(1)}%;top:${((y / h) * 100).toFixed(1)}%;width:${size}px;height:${size}px;margin:-${size / 2}px 0 0 -${size / 2}px;background:${color};"></span>`;
+        }).join('');
+      }
 
       let areaFill = '';
       if (series.length === 1 || s.fillArea) {
@@ -455,9 +665,10 @@ const SimpleCharts = {
     container.innerHTML = `
       <div class="sc-line-wrap">
         <div class="sc-line-plot">
-          <svg viewBox="0 0 ${w} ${h}" class="sc-line-svg" preserveAspectRatio="none" role="img" aria-label="Gráfico de linha"><defs>${defs}</defs>${yAxisGridSvg}${referenceLinesSvg}${zeroLine}${layers}</svg>
+          <svg viewBox="0 0 ${w} ${h}" class="sc-line-svg" preserveAspectRatio="none" role="img" aria-label="${escapeAttr(opts.ariaLabel || 'Gráfico de linha')}"><defs>${defs}</defs>${yAxisGridSvg}${referenceLinesSvg}${zeroLine}${layers}</svg>
           ${yAxisOverlay}
           ${overlay}
+          ${endDotsOverlay}
         </div>
         <div class="sc-line-xlabels">${xLabels}</div>
       </div>
@@ -638,19 +849,14 @@ const SimpleCharts = {
    * state?: 'normal'|'warning'|'danger', centerValue? }
    *
    * Cor do preenchimento por semáforo — verde (margem boa), amarelo
-   * (aproximando do limite) ou vermelho (ultrapassado) — usando as mesmas
-   * variáveis semânticas do resto do app (--success/--warning/--danger),
-   * já calibradas pra serem discretas e combinarem com o fundo roxo escuro
-   * do card, em vez de tons gritantes.
+   * (aproximando do limite) ou vermelho (ultrapassado). O card do medidor
+   * (.raiox-card) agora tem fundo neutro (mesmo dos outros cards), então as
+   * cores seguem os mesmos tons de --success/--warning/--danger do tema
+   * (um hex por claro/escuro aqui, porque _shade() abaixo precisa de hex
+   * pra montar o gradiente do preenchimento — não dá pra passar var(...)).
    */
-  /* Cores do preenchimento fixas (não seguem --success/--warning/--danger do
-     tema) — o card do medidor (.raiox-card) é sempre um gradiente roxo vívido
-     ou quase-preto, nunca uma superfície neutra clara, então as versões
-     "claras" desses tokens (pensadas pra texto sobre fundo neutro) ficavam
-     esmaecidas/sem contraste em cima dele. Os valores abaixo já eram usados
-     no glow (filter: drop-shadow) do CSS — só o preenchimento não seguia
-     essa mesma cor no tema claro. */
-  gaugeColors: { normal: '#34D399', warning: '#FBBF24', danger: '#F87171' },
+  gaugeColorsLight: { normal: '#187E56', warning: '#966319', danger: '#C0392B' },
+  gaugeColorsDark: { normal: '#34D399', warning: '#FBBF24', danger: '#F87171' },
 
   gauge(containerId, opts = {}) {
     const container = document.getElementById(containerId);
@@ -667,7 +873,8 @@ const SimpleCharts = {
     const trackPath = `M ${sx.toFixed(2)} ${sy.toFixed(2)} A ${r} ${r} 0 0 1 ${ex.toFixed(2)} ${ey.toFixed(2)}`;
 
     const state = opts.state || 'normal';
-    const baseColor = this.gaugeColors[state] || this.gaugeColors.normal;
+    const gaugeColors = this.isDark() ? this.gaugeColorsDark : this.gaugeColorsLight;
+    const baseColor = gaugeColors[state] || gaugeColors.normal;
     const gradId = `sc-gauge-g${this._uid++}`;
     const gaugeGradient = `
       <linearGradient id="${gradId}" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -682,9 +889,12 @@ const SimpleCharts = {
       const outerR = r + stroke / 2 + 5;
       const [ix, iy] = pointFor(opts.limitPct, innerR);
       const [ox, oy] = pointFor(opts.limitPct, outerR);
+      // Halo na cor do card (var(--surface)) por baixo do traço de destaque —
+      // mesmo truque do ponto de hover no gráfico de linha (.sc-line-hover-dot)
+      // pra "recortar" o marcador de cima do preenchimento em qualquer tema.
       markerSvg = `
-        <line x1="${ix.toFixed(2)}" y1="${iy.toFixed(2)}" x2="${ox.toFixed(2)}" y2="${oy.toFixed(2)}" stroke="rgba(44,27,87,0.7)" stroke-width="5" stroke-linecap="round"/>
-        <line x1="${ix.toFixed(2)}" y1="${iy.toFixed(2)}" x2="${ox.toFixed(2)}" y2="${oy.toFixed(2)}" stroke="rgba(255,255,255,0.95)" stroke-width="2.5" stroke-linecap="round"/>
+        <line x1="${ix.toFixed(2)}" y1="${iy.toFixed(2)}" x2="${ox.toFixed(2)}" y2="${oy.toFixed(2)}" stroke="var(--surface)" stroke-width="6" stroke-linecap="round"/>
+        <line x1="${ix.toFixed(2)}" y1="${iy.toFixed(2)}" x2="${ox.toFixed(2)}" y2="${oy.toFixed(2)}" stroke="var(--text-primary)" stroke-width="2.5" stroke-linecap="round"/>
       `;
     }
 
@@ -694,7 +904,13 @@ const SimpleCharts = {
       <div class="sc-gauge-wrap">
         <svg viewBox="0 0 ${w} ${h}" class="sc-gauge-svg" role="img" aria-label="Medidor de ${Math.round(pct)}%">
           <defs>${gaugeGradient}</defs>
-          <path d="${trackPath}" fill="none" stroke="rgba(255,255,255,0.16)" stroke-width="${stroke}" stroke-linecap="round"/>
+          <!-- Trilho em --border (não --surface-soft): a diferença de tom
+               entre --surface-soft e o fundo translúcido do .raiox-card
+               era pequena demais — a parte não preenchida do arco ficava
+               quase invisível, e o traço do marcador de limite (markerSvg
+               abaixo) parecia flutuar sozinho no vazio em vez de cruzar
+               visivelmente o trilho. -->
+          <path d="${trackPath}" fill="none" stroke="var(--border)" stroke-width="${stroke}" stroke-linecap="round"/>
           <path d="${trackPath}" fill="none" stroke="${fillColor}" stroke-width="${stroke}" stroke-linecap="round" pathLength="100" stroke-dasharray="${fillLen.toFixed(2)} ${(100 - fillLen).toFixed(2)}" class="sc-gauge-fill sc-gauge-fill-${state}"/>
           ${markerSvg}
         </svg>
@@ -712,7 +928,10 @@ const SimpleCharts = {
    * `date`). Nível 0 = sem gasto naquele dia — nunca inventamos
    * intensidade; níveis 1-4 vêm de quartis dos dias com valor > 0.
    * `opts.emptyMessage` substitui o grid por um estado vazio quando não há
-   * nenhum dia com gasto real lançado ainda.
+   * nenhum dia com gasto real lançado ainda. Cada célula mostra o número do
+   * dia, o dia de hoje ganha um anel de destaque, e passar o mouse/focar
+   * (teclado) abre um tooltip próprio (ver _attachHeatmapHover) em vez do
+   * title nativo do navegador.
    */
   heatmap(containerId, days, opts = {}) {
     const container = document.getElementById(containerId);
@@ -734,14 +953,19 @@ const SimpleCharts = {
       return 4;
     };
 
+    // Data local (não toISOString, que é UTC e erraria o dia perto da meia-noite em fusos como o do Brasil).
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
     const [ano, mes] = list[0].date.split('-').map(Number);
     const firstWeekday = new Date(ano, mes - 1, 1).getDay();
     const leading = Array.from({ length: firstWeekday }, () => `<div class="sc-heatmap-cell is-empty"></div>`).join('');
     const cells = list.map((d) => {
       const level = levelFor(d.value);
       const dataCurta = `${d.date.slice(8, 10)}/${d.date.slice(5, 7)}`;
-      const title = `${dataCurta} — ${d.value > 0 ? formatBRL(d.value) : 'sem gastos'}`;
-      return `<div class="sc-heatmap-cell" data-level="${level}" title="${escapeAttr(title)}"></div>`;
+      const tooltip = `${dataCurta} — ${d.value > 0 ? formatBRL(d.value) : 'sem gastos'}`;
+      const isToday = d.date === todayStr ? ' is-today' : '';
+      return `<div class="sc-heatmap-cell${isToday}" data-level="${level}" data-tooltip="${escapeAttr(tooltip)}" tabindex="0" role="button" aria-label="${escapeAttr(tooltip)}"><span class="sc-heatmap-cell-day">${d.day}</span></div>`;
     }).join('');
 
     const weekdaysHtml = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((w) => `<span>${w}</span>`).join('');
@@ -753,6 +977,47 @@ const SimpleCharts = {
         <div class="sc-heatmap-legend">Menos<div class="sc-heatmap-legend-scale"></div>Mais</div>
       </div>
     `;
+    this._attachHeatmapHover(container);
+  },
+
+  /**
+   * Tooltip próprio do calendário de gastos — mesmo padrão de
+   * _attachLineHover (um único elemento reaproveitado, ancorado perto do
+   * alvo, sem vazar do card), só que disparado por célula (mouse ou foco de
+   * teclado) em vez de posição X contínua do mouse sobre um SVG.
+   */
+  _attachHeatmapHover(container) {
+    const wrap = container.querySelector('.sc-heatmap-wrap');
+    const grid = container.querySelector('.sc-heatmap-grid');
+    if (!wrap || !grid) return;
+
+    const tooltip = document.createElement('div');
+    tooltip.className = 'sc-heatmap-tooltip';
+    wrap.appendChild(tooltip);
+
+    const show = (cell) => {
+      const text = cell.dataset.tooltip;
+      if (!text) return;
+      tooltip.textContent = text;
+      const wrapRect = wrap.getBoundingClientRect();
+      const cellRect = cell.getBoundingClientRect();
+      const xPct = ((cellRect.left + cellRect.width / 2 - wrapRect.left) / wrapRect.width) * 100;
+      const topPct = ((cellRect.top - wrapRect.top) / wrapRect.height) * 100;
+
+      if (xPct > 85) { tooltip.style.left = 'auto'; tooltip.style.right = `${(100 - xPct).toFixed(1)}%`; tooltip.style.transform = 'translate(0, -100%)'; }
+      else if (xPct < 15) { tooltip.style.right = 'auto'; tooltip.style.left = `${xPct.toFixed(1)}%`; tooltip.style.transform = 'translate(0, -100%)'; }
+      else { tooltip.style.right = 'auto'; tooltip.style.left = `${xPct.toFixed(1)}%`; tooltip.style.transform = 'translate(-50%, -100%)'; }
+      tooltip.style.top = `${topPct.toFixed(1)}%`;
+      tooltip.classList.add('is-visible');
+    };
+    const hide = () => tooltip.classList.remove('is-visible');
+
+    grid.querySelectorAll('.sc-heatmap-cell:not(.is-empty)').forEach((cell) => {
+      cell.addEventListener('mouseenter', () => show(cell));
+      cell.addEventListener('mouseleave', hide);
+      cell.addEventListener('focus', () => show(cell));
+      cell.addEventListener('blur', hide);
+    });
   },
 
   /**
@@ -829,6 +1094,38 @@ const SimpleCharts = {
     plot.addEventListener('touchstart', (e) => { if (e.touches[0]) onMove(e.touches[0].clientX); }, { passive: true });
     plot.addEventListener('touchmove', (e) => { if (e.touches[0]) onMove(e.touches[0].clientX); }, { passive: true });
     plot.addEventListener('touchend', onLeave);
+  },
+
+  /**
+   * Tooltip ao passar o mouse/tocar/focar (teclado) em cada barra de
+   * `comparisonBars` — mostra o valor exato (mesmo `fmt` da tabela abaixo
+   * do gráfico) só na interação, em vez de um rótulo sempre visível que
+   * pode arredondar diferente do resto do card.
+   */
+  _attachBarHover(container, { values, fmt, barCentersPct, barTopsPct }) {
+    const tooltip = container.querySelector('.sc-cbar-tooltip');
+    const bars = container.querySelectorAll('.sc-cbar-bar');
+    if (!tooltip || !bars.length) return;
+
+    const show = (i) => {
+      tooltip.textContent = fmt(values[i]);
+      tooltip.style.left = `${barCentersPct[i].toFixed(1)}%`;
+      tooltip.style.top = `${Math.max(barTopsPct[i] - 4, 2).toFixed(1)}%`;
+      tooltip.classList.add('is-visible');
+    };
+    const hide = () => tooltip.classList.remove('is-visible');
+
+    bars.forEach((bar, i) => {
+      bar.setAttribute('tabindex', '0');
+      bar.setAttribute('role', 'img');
+      bar.setAttribute('aria-label', fmt(values[i]));
+      bar.addEventListener('mouseenter', () => show(i));
+      bar.addEventListener('mouseleave', hide);
+      bar.addEventListener('focus', () => show(i));
+      bar.addEventListener('blur', hide);
+      bar.addEventListener('touchstart', () => show(i), { passive: true });
+    });
+    container.querySelector('.sc-cbar-plot').addEventListener('touchend', hide);
   },
 };
 

@@ -138,10 +138,11 @@ inline no ponto de entrada do app):
    `DOMContentLoaded`
 2. Sem sessão → redireciona pra `login.html`
 3. Com sessão → adiciona a classe `authed` na `<html>` (libera o app-shell)
-4. `setupAccountSection()` preenche `#account-email` e liga
-   `#account-logout-btn` (card "Conta", último item da tela de Perfil) e
-   `#side-logout-btn` (rodapé fixo da sidebar, com confirmação) a
-   `supabaseClient.auth.signOut()` + redirect pro login
+4. `setupAccountSection()` liga `#side-logout-btn` (rodapé fixo da sidebar,
+   com confirmação) a `supabaseClient.auth.signOut()` + redirect pro login
+   — único botão de logout do app (o card "Conta" que existia no fim da
+   tela de Perfil, com email + logout sem confirmação, foi removido por
+   ser redundante)
 
 Script leve, sem dependência dos outros módulos do app (Storage, Dashboard
 etc.) — só precisa que os elementos do HTML já existam.

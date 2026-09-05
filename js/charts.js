@@ -27,7 +27,7 @@ const Charts = {
     this._renderAlerts(data);
     this._renderTopExpenses(data);
     this._renderCashFlow(data);
-    this._renderDailySpendingComparison(data);
+    this._renderReservaGoal(data);
     this._renderInvestmentEvolutionChart(data);
     this._renderHistoryTable(data);
   },
@@ -94,7 +94,10 @@ const Charts = {
     setText('analises-next-month-gastos', formatBRL(proj.gastosPrevistos));
     setText('analises-next-month-saldo', formatBRL(proj.saldoEstimado));
     setText('analises-next-month-percentual', proj.percentual != null ? formatPercent(proj.percentual) : 'não informado');
-    setText('analises-next-month-obs', proj.obsVariaveis);
+    const fill = document.getElementById('analises-next-month-progress-fill');
+    if (fill) fill.style.width = `${Math.min(Math.max(proj.percentual || 0, 0), 100)}%`;
+    const obsEl = document.getElementById('analises-next-month-obs');
+    if (obsEl) obsEl.innerHTML = `<span class="material-symbols-outlined" aria-hidden="true">info</span>${escapeHtml(proj.obsVariaveis)}`;
   },
 
   _buildAlertItem(alert) {
@@ -197,8 +200,8 @@ const Charts = {
    * Evolução financeira. Modo "mensal" (padrão): Renda, Gastos e Saldo por
    * mês, com rótulo de valor no Saldo e dois selos automáticos (melhor mês
    * / limite ultrapassado). Modo "diário": gasto acumulado dia a dia do mês
-   * atual (mesma fonte do "Ritmo de gasto") — só fica disponível quando há
-   * dado real (ver _renderEvolutionToggle).
+   * atual (mesma fonte do calendário de gastos) — só fica disponível quando
+   * há dado real (ver _renderEvolutionToggle).
    */
   _renderEvolutionChart(data) {
     if (this._evolutionPeriod === 'diario') {
@@ -257,52 +260,76 @@ const Charts = {
   },
 
   /**
-   * Gasto acumulado dia a dia — mês anterior, mês atual e mês seguinte.
-   * Visual minimalista de propósito: linhas finas, sem pontos em cada dia
-   * (com ~30 dias × 3 séries, marcador em todo ponto ficava poluído) — a
-   * diferenciação vem de espessura/opacidade (mês atual em destaque) e do
-   * tracejado no mês previsto, não de bolinhas. Só aparece se pelo menos um
-   * dos três meses tiver dado com data real.
+   * Meta de reserva de emergência (aba Análises) — anel de progresso com o
+   * mesmo dado configurado no popup de Perfil (Profile.openReservaModal),
+   * que é a única porta de entrada desse valor agora (sem mais formulário
+   * inline em Perfil). Sem meta definida ainda, mostra um atalho pro popup
+   * em vez de um gráfico vazio. Card neutro (mesmo fundo dos vizinhos, ver
+   * .reserva-card em style.css), só com um acento teal→roxo no anel.
    */
-  _renderDailySpendingComparison(data) {
-    const wrap = document.getElementById('analises-ritmo-gasto-section');
-    if (!wrap) return;
+  _renderReservaGoal(data) {
+    const container = document.getElementById('chart-reserva-emergencia');
+    if (!container) return;
+    const reserva = data.reservaEmergencia || {};
 
-    const mesAtual = data.meta.mesReferenciaAtual;
-    const mesAnterior = addMonths(mesAtual, -1);
-    const mesSeguinte = addMonths(mesAtual, 1);
-    const anterior = Calc.calculateDailySpendingCurve(data, mesAnterior);
-    const atual = Calc.calculateDailySpendingCurve(data, mesAtual);
-    const seguinte = Calc.calculateDailySpendingCurve(data, mesSeguinte);
-
-    if (!anterior.hasData && !atual.hasData && !seguinte.hasData) {
-      wrap.style.display = 'none';
+    if (!reserva.possui || reserva.metaValor == null) {
+      container.innerHTML = `
+        <div class="reserva-empty">
+          <p>Você ainda não definiu uma meta de reserva de emergência.</p>
+          <button type="button" class="reserva-quick-btn" onclick="Profile.openReservaModal()">
+            <span class="reserva-quick-btn-icon"><span class="material-symbols-outlined" aria-hidden="true">shield</span></span>
+            <span class="reserva-quick-btn-text"><strong>Definir meta</strong><small>Comece a acompanhar sua reserva</small></span>
+            <span class="material-symbols-outlined reserva-quick-btn-chevron" aria-hidden="true">chevron_right</span>
+          </button>
+        </div>
+      `;
       return;
     }
-    wrap.style.display = 'block';
 
-    const n = Math.min(anterior.curve.length, atual.curve.length, seguinte.curve.length);
-    const labels = Array.from({ length: n }, (_, i) => String(i + 1));
+    const valorAtual = reserva.valorAtual || 0;
+    const pct = Math.min((valorAtual / reserva.metaValor) * 100, 100);
+    const restante = Math.max(reserva.metaValor - valorAtual, 0);
+    const meses = Calc.calculateEmergencyFundMonthsCovered(data);
 
-    SimpleCharts.line('chart-ritmo-gasto', {
-      labels,
-      // Sem monotone aqui de propósito: a curva suave (Catmull-Rom) ondula um
-      // pouco entre os pontos em vez de ficar reta nos trechos acumulados
-      // sem gasto novo — efeito pedido, mesmo não sendo 100% literal ao dado.
-      hideDots: true,
-      showYAxis: true,
-      labelFormatter: (v) => `R$ ${formatBRLShort(v)}`,
-      series: [
-        // Paleta neutra de propósito aqui (em vez de uma cor por mês) — o
-        // que diferencia cada linha é opacidade/tracejado/preenchimento, não
-        // o matiz nem a espessura (as três ficam igualmente finas); o mês
-        // atual ganha um gradiente sutil embaixo pra se destacar sem precisar
-        // de um traço mais grosso.
-        { name: `${formatMonthKeyShort(mesAnterior)}`, data: anterior.curve.slice(0, n), color: 'var(--text-muted)', strokeWidth: 1.75, opacity: 0.6 },
-        { name: `${formatMonthKeyShort(mesAtual)} (atual)`, data: atual.curve.slice(0, n), color: 'var(--purple-500)', strokeWidth: 1.5, fillArea: true, fillOpacity: 0.16 },
-        { name: `${formatMonthKeyShort(mesSeguinte)} (previsto)`, data: seguinte.curve.slice(0, n), color: 'var(--text-muted)', strokeWidth: 1.75, opacity: 0.6, dashed: true },
-      ],
+    container.innerHTML = `
+      <div class="reserva-body">
+        <div id="reserva-goal-ring"></div>
+        <div class="reserva-stats">
+          <div class="reserva-stat-row"><span>Guardado</span><strong>${formatBRL(valorAtual)}</strong></div>
+          <div class="reserva-stat-row"><span>Meta</span><strong>${formatBRL(reserva.metaValor)}</strong></div>
+          <div class="reserva-stat-row"><span>${restante > 0 ? 'Falta guardar' : 'Status'}</span><strong>${restante > 0 ? formatBRL(restante) : 'Meta atingida 🎉'}</strong></div>
+          ${meses != null ? `<div class="reserva-stat-row"><span>Cobertura hoje</span><strong class="accent">~${meses.toFixed(1)} mês(es) de gastos</strong></div>` : ''}
+        </div>
+      </div>
+      <div class="reserva-goal-actions">
+        <button type="button" class="reserva-quick-btn" onclick="Profile.openReservaValorModal()">
+          <span class="reserva-quick-btn-icon"><span class="material-symbols-outlined" aria-hidden="true">savings</span></span>
+          <span class="reserva-quick-btn-text"><strong>Registrar valor</strong><small>Atualizar quanto já guardei</small></span>
+          <span class="material-symbols-outlined reserva-quick-btn-chevron" aria-hidden="true">chevron_right</span>
+        </button>
+        <button type="button" class="icon-btn" onclick="Profile.openReservaModal()" title="Editar meta" aria-label="Editar meta"><span class="material-symbols-outlined" aria-hidden="true">edit</span></button>
+      </div>
+    `;
+    SimpleCharts.progressRing('reserva-goal-ring', {
+      pct,
+      size: 136,
+      radius: 58,
+      strokeWidth: 9,
+      gradient: ['var(--rv-teal)', 'var(--purple-500)'],
+      centerSub: this._reservaStatusLabel(pct),
+      ariaLabel: `Meta de reserva de emergência: ${pct.toFixed(0)}% concluída`,
     });
+  },
+
+  /** Palavra de status abaixo do percentual no anel — mesma ideia do rótulo
+      qualitativo ("Excellent" etc.) de referências de anel de progresso, só
+      que com os degraus que já fazem sentido pra uma meta de reserva. */
+  _reservaStatusLabel(pct) {
+    if (pct >= 100) return 'Meta atingida';
+    if (pct >= 75) return 'Quase lá';
+    if (pct >= 40) return 'No caminho certo';
+    if (pct > 0) return 'Começando';
+    return 'Vamos começar';
   },
 
   // Só faz sentido como gráfico à parte quando há margem de segurança configurada
@@ -371,10 +398,14 @@ const Charts = {
     const b = data.historicoMensal.find((h) => h.mes === selB.value);
     if (!a || !b) { result.innerHTML = ''; return; }
 
-    SimpleCharts.bar('compare-bars', {
+    // Mesma métrica (gastos) em dois pontos no tempo, não duas categorias
+    // — um só matiz, mês mais antigo mais claro / mais recente mais escuro
+    // (mesma leitura que qualquer comparação "antes/depois" do app).
+    SimpleCharts.comparisonBars('compare-bars', {
       labels: [formatMonthKeyShort(a.mes), formatMonthKeyShort(b.mes)],
       values: [a.gastos, b.gastos],
-      colors: [SimpleCharts.colorFor(2), SimpleCharts.colorFor(0)],
+      colors: ['var(--purple-500)', 'var(--purple-700)'],
+      ariaLabel: `Gastos de ${formatMonthKeyShort(a.mes)}: ${formatBRL(a.gastos)}. Gastos de ${formatMonthKeyShort(b.mes)}: ${formatBRL(b.gastos)}.`,
     });
 
     const diffGastos = b.gastos - a.gastos;

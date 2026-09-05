@@ -126,11 +126,11 @@ const Report = {
     const pct = Calc.calculateCommittedPercentage(data, mes);
     const limite = Calc.calculateCommitmentLimit(data);
     const nivel = limite ? Calc.calculateCommitmentLevel(pct, limite.percentual) : null;
-    const msg = typeof buildRaioXMessage === 'function' ? buildRaioXMessage(pct, renda, gastos, limite, nivel) : '';
+    const msg = typeof buildRaioXMessage === 'function' ? buildRaioXMessage(pct, renda, gastos, limite, nivel) : { title: '', detail: '' };
     return `
       <div class="report-section">
         <div class="report-section-title">05 · Comprometimento da renda</div>
-        <p class="report-empty" style="color:#201A33;">${escapeHtml(msg)}</p>
+        <p class="report-empty" style="color:#201A33;"><strong>${escapeHtml(msg.title)}</strong> ${escapeHtml(msg.detail)}</p>
       </div>
     `;
   },

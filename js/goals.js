@@ -40,7 +40,7 @@ const Goals = {
           <div class="goal-name">${escapeHtml(m.nome)}</div>
           <div class="goal-actions">
             <button class="mini-btn icon-btn" data-action="edit" title="Editar" aria-label="Editar meta"><span class="material-symbols-outlined" aria-hidden="true">edit</span></button>
-            <button class="mini-btn icon-btn danger" data-action="delete" title="Excluir" aria-label="Excluir meta"><span class="material-symbols-outlined" aria-hidden="true">delete</span></button>
+            <button class="mini-btn icon-btn" data-action="delete" title="Excluir" aria-label="Excluir meta"><span class="material-symbols-outlined" aria-hidden="true">delete</span></button>
           </div>
         </div>
         <div class="progress-track"><div class="progress-fill" style="width:${prog.percent}%"></div></div>
@@ -63,7 +63,7 @@ const Goals = {
           <div class="goal-name">${escapeHtml(m.nome)}</div>
           <div class="goal-actions">
             <button class="mini-btn icon-btn" data-action="edit" title="Editar" aria-label="Editar meta"><span class="material-symbols-outlined" aria-hidden="true">edit</span></button>
-            <button class="mini-btn icon-btn danger" data-action="delete" title="Excluir" aria-label="Excluir meta"><span class="material-symbols-outlined" aria-hidden="true">delete</span></button>
+            <button class="mini-btn icon-btn" data-action="delete" title="Excluir" aria-label="Excluir meta"><span class="material-symbols-outlined" aria-hidden="true">delete</span></button>
           </div>
         </div>
         <div class="goal-progress-meta"><span>Meta de hábito mensal: guardar ${formatBRL(m.valorMensalDesejado)}/mês</span></div>

@@ -500,34 +500,116 @@ const Calc = {
     return { pctAntes, pctDepois, limite, nivelDepois };
   },
 
-  /** Lembretes automáticos para o menu lateral (seção 21 do backlog). */
+  /**
+   * "vencimento" de despesasRecorrentes é texto livre (ex.: "dia 05", ver
+   * index.html) — não uma data real. Extrai o dia com o mesmo regex que
+   * _dailyTotalsForMonth já usa (linha ~359) e monta uma data dentro do mês
+   * de referência só pra dar um rótulo relativo aproximado ("vence em N
+   * dias"). Sem dia reconhecível no texto, não dá pra estimar prazo.
+   */
+  _prazoRelativoVencimento(vencimentoTexto, mesReferencia, hoje = new Date()) {
+    const match = (vencimentoTexto || '').match(/(\d{1,2})/);
+    if (!match) return null;
+    const [ano, mes] = mesReferencia.split('-').map(Number);
+    const daysInMonth = new Date(ano, mes, 0).getDate();
+    const dia = Math.min(Math.max(parseInt(match[1], 10), 1), daysInMonth);
+    const dataVencimento = new Date(ano, mes - 1, dia);
+    const hojeSemHora = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
+    const diffDias = Math.round((dataVencimento - hojeSemHora) / 86400000);
+    let texto;
+    if (diffDias === 0) texto = 'vence hoje';
+    else if (diffDias > 0) texto = `vence em ${diffDias} dia${diffDias > 1 ? 's' : ''}`;
+    else texto = `venceu há ${-diffDias} dia${-diffDias > 1 ? 's' : ''}`;
+    return { texto, urgente: diffDias <= 1 };
+  },
+
+  /**
+   * Lembretes automáticos para o menu lateral e central de notificações
+   * (seção 21 do backlog). Cada item já sai pronto pra exibir: `severidade`
+   * ('urgente' vermelho / 'atencao' âmbar — só 2 níveis, de propósito),
+   * `titulo` curto, `contexto` (linha real, sem truncar) e `prazo` relativo
+   * (ou null quando não se aplica). Lembretes do mesmo tipo que se repetem
+   * (ex.: 2+ contas pendentes da mesma categoria) já chegam AGRUPADOS num
+   * item só com `count`, em vez de linhas duplicadas — quem desenha a UI não
+   * precisa saber agrupar nada.
+   */
   calculateReminders(data) {
     const reminders = [];
+    const mesReferencia = data.meta.mesReferenciaAtual;
 
-    // Inconsistências detectadas nos dados (ex.: totais que não batem) são o
-    // tipo mais importante de aviso — entram primeiro na lista.
+    // Inconsistências detectadas nos dados (ex.: totais que não batem) não
+    // agrupam entre si — cada uma descreve um problema diferente, agrupar
+    // perderia a informação específica. Sempre urgente (vermelho).
     (data.inconsistenciasDetectadas || [])
       .filter((i) => !i.resolvida)
       .forEach((i) => {
-        reminders.push({ id: `inc-${i.id}`, icon: 'warning', texto: i.descricao });
+        reminders.push({ id: `inc-${i.id}`, severidade: 'urgente', titulo: 'Inconsistência nos dados', contexto: i.descricao, prazo: null });
       });
 
-    this.calculateUpcomingEndings(data, 0).forEach((x) => {
-      reminders.push({ id: `parcfim-${x.parcelamento.id}`, icon: 'lightbulb', texto: `Última parcela de "${x.parcelamento.nome}" é cobrada este mês.` });
+    // Parcelamentos terminando este mês: informativo (não é urgente), então
+    // agrupam entre si quando há 2+.
+    const encerrando = this.calculateUpcomingEndings(data, 0).map((x) => x.parcelamento);
+    if (encerrando.length === 1) {
+      const p = encerrando[0];
+      reminders.push({ id: `parcfim-${p.id}`, severidade: 'atencao', titulo: `Última parcela de "${p.nome}"`, contexto: `${formatBRL(p.valorParcela)} · última cobrança este mês`, prazo: 'este mês' });
+    } else if (encerrando.length > 1) {
+      reminders.push({ id: `parcfim-group-${mesReferencia}`, severidade: 'atencao', titulo: `${encerrando.length} parcelamentos terminando este mês`, contexto: encerrando.map((p) => p.nome).join(', '), prazo: 'este mês', count: encerrando.length });
+    }
+
+    // Contas recorrentes pendentes: agrupam por categoria quando 2+
+    // compartilham a mesma — daí o exemplo "Categoria 'X' pendente" no
+    // pedido original. Severidade por conta: urgente se vence hoje/amanhã
+    // ou já venceu, senão só atenção.
+    const pendentes = data.despesasRecorrentes.filter((d) => d.status === 'Pendente' && d.vencimento && this.isDespesaRecorrenteAtiva(d, mesReferencia));
+    const porCategoria = {};
+    pendentes.forEach((d) => {
+      const cat = d.categoria || 'Sem categoria';
+      (porCategoria[cat] = porCategoria[cat] || []).push(d);
     });
-
-    data.despesasRecorrentes
-      .filter((d) => d.status === 'Pendente' && d.vencimento && this.isDespesaRecorrenteAtiva(d, data.meta.mesReferenciaAtual))
-      .forEach((d) => {
-        reminders.push({ id: `rec-${d.id}`, icon: 'warning', texto: `${d.nome} pendente, vencimento ${d.vencimento}.` });
-      });
-
-    data.metas.forEach((m) => {
-      const prog = this.calculateGoalProgress(m);
-      if (prog && prog.percent >= 80 && prog.percent < 100) {
-        reminders.push({ id: `meta-${m.id}`, icon: 'track_changes', texto: `Meta "${m.nome}" está ${formatPercent(prog.percent)} concluída.` });
+    Object.keys(porCategoria).forEach((categoria) => {
+      const itens = porCategoria[categoria];
+      const prazos = itens.map((d) => this._prazoRelativoVencimento(d.vencimento, mesReferencia));
+      const algumUrgente = prazos.some((p) => p && p.urgente);
+      if (itens.length === 1) {
+        const d = itens[0];
+        const prazo = prazos[0];
+        reminders.push({
+          id: `rec-${d.id}`,
+          severidade: prazo && prazo.urgente ? 'urgente' : 'atencao',
+          titulo: d.nome,
+          contexto: `${formatBRL(d.valor)} · vencimento ${d.vencimento}`,
+          prazo: prazo ? prazo.texto : null,
+        });
+      } else {
+        const maisUrgente = prazos.filter(Boolean).sort((a, b) => (a.urgente === b.urgente ? 0 : a.urgente ? -1 : 1))[0];
+        reminders.push({
+          id: `rec-cat-${categoria}-${mesReferencia}`,
+          severidade: algumUrgente ? 'urgente' : 'atencao',
+          titulo: `${itens.length} contas de "${categoria}" pendentes`,
+          contexto: itens.map((d) => d.nome).join(', '),
+          prazo: maisUrgente ? `mais próxima ${maisUrgente.texto}` : null,
+          count: itens.length,
+        });
       }
     });
+
+    // Metas quase concluídas: informativo, agrupam entre si quando há 2+.
+    const metasQuaseLa = data.metas
+      .map((m) => ({ meta: m, prog: this.calculateGoalProgress(m) }))
+      .filter((x) => x.prog && x.prog.percent >= 80 && x.prog.percent < 100);
+    if (metasQuaseLa.length === 1) {
+      const { meta, prog } = metasQuaseLa[0];
+      reminders.push({ id: `meta-${meta.id}`, severidade: 'atencao', titulo: `Meta "${meta.nome}"`, contexto: `${formatPercent(prog.percent)} concluída`, prazo: null });
+    } else if (metasQuaseLa.length > 1) {
+      reminders.push({
+        id: `meta-group-${mesReferencia}`,
+        severidade: 'atencao',
+        titulo: `${metasQuaseLa.length} metas quase concluídas`,
+        contexto: metasQuaseLa.map((x) => `${x.meta.nome} (${formatPercent(x.prog.percent)})`).join(', '),
+        prazo: null,
+        count: metasQuaseLa.length,
+      });
+    }
 
     return reminders;
   },

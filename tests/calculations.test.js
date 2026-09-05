@@ -365,6 +365,73 @@ assertEqual(
 );
 
 // ---------------------------------------------------------------------
+// calculateReminders: severidade, prazo relativo e agrupamento por categoria
+// (redesign do card de lembretes da sidebar)
+// ---------------------------------------------------------------------
+
+// _prazoRelativoVencimento aceita um "hoje" explícito (3º parâmetro, só pra
+// teste determinístico — em produção usa a data real) pra não depender do
+// dia em que os testes rodam.
+assertEqual(
+  Calc._prazoRelativoVencimento('dia 05', '2026-09', new Date(2026, 8, 5)),
+  { texto: 'vence hoje', urgente: true },
+  '_prazoRelativoVencimento: mesmo dia = "vence hoje", urgente'
+);
+assertEqual(
+  Calc._prazoRelativoVencimento('dia 20', '2026-09', new Date(2026, 8, 5)),
+  { texto: 'vence em 15 dias', urgente: false },
+  '_prazoRelativoVencimento: data futura = "vence em N dias", não urgente'
+);
+assertEqual(
+  Calc._prazoRelativoVencimento('dia 01', '2026-09', new Date(2026, 8, 5)),
+  { texto: 'venceu há 4 dias', urgente: true },
+  '_prazoRelativoVencimento: data passada = "venceu há N dias", urgente'
+);
+assertEqual(
+  Calc._prazoRelativoVencimento('sem dia reconhecível', '2026-09'),
+  null,
+  '_prazoRelativoVencimento: texto sem número reconhecível devolve null'
+);
+
+// Duas contas "Contas" pendentes sem dia reconhecível no vencimento (prazo
+// null garante severidade determinística = 'atencao', independente da data
+// real em que o teste roda) devem virar UM lembrete agrupado com count:2.
+const remindersAgrupados = Calc.calculateReminders(baseData({
+  despesasRecorrentes: [
+    { id: 'internet', nome: 'Internet', valor: 100, categoria: 'Contas', status: 'Pendente', vencimento: 'não definido' },
+    { id: 'agua', nome: 'Água', valor: 80, categoria: 'Contas', status: 'Pendente', vencimento: 'não definido' },
+  ],
+}));
+const grupoContas = remindersAgrupados.find((r) => r.id === 'rec-cat-Contas-2026-09');
+assertEqual(!!grupoContas, true, 'calculateReminders: contas pendentes da mesma categoria viram um item agrupado');
+assertEqual(grupoContas && grupoContas.count, 2, 'calculateReminders: item agrupado leva a contagem certa');
+assertEqual(grupoContas && grupoContas.severidade, 'atencao', 'calculateReminders: sem prazo reconhecível, severidade cai pra "atencao"');
+assertEqual(grupoContas && grupoContas.titulo, '2 contas de "Contas" pendentes', 'calculateReminders: título do grupo cita a categoria e a contagem');
+assertEqual(grupoContas && grupoContas.contexto.includes('Internet') && grupoContas.contexto.includes('Água'), true, 'calculateReminders: contexto do grupo lista os nomes das contas');
+
+// Uma única conta pendente (categoria sem duplicata) continua como item
+// individual, sem virar grupo.
+const remindersIndividual = Calc.calculateReminders(baseData({
+  despesasRecorrentes: [
+    { id: 'luz', nome: 'Conta de luz', valor: 120, categoria: 'Contas', status: 'Pendente', vencimento: 'não definido' },
+  ],
+}));
+assertEqual(remindersIndividual.some((r) => r.id === 'rec-luz'), true, 'calculateReminders: conta pendente sem duplicata mantém id individual');
+assertEqual(remindersIndividual.some((r) => r.count), false, 'calculateReminders: item individual não leva count');
+
+// Metas quase concluídas (80%-99%) também agrupam quando há 2+.
+const remindersMetas = Calc.calculateReminders(baseData({
+  metas: [
+    { id: 'm1', nome: 'Viagem', valorDesejado: 1000, valorAtual: 900 }, // 90%
+    { id: 'm2', nome: 'Notebook', valorDesejado: 2000, valorAtual: 1700 }, // 85%
+  ],
+}));
+const grupoMetas = remindersMetas.find((r) => r.id === 'meta-group-2026-09');
+assertEqual(!!grupoMetas, true, 'calculateReminders: 2+ metas quase concluídas viram um item agrupado');
+assertEqual(grupoMetas && grupoMetas.count, 2, 'calculateReminders: grupo de metas leva a contagem certa');
+assertEqual(grupoMetas && grupoMetas.titulo, '2 metas quase concluídas', 'calculateReminders: título do grupo de metas');
+
+// ---------------------------------------------------------------------
 // Resultado
 // ---------------------------------------------------------------------
 console.log(`\n${passed} passaram, ${failed} falharam.`);

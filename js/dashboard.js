@@ -9,6 +9,9 @@ const DASH_ICON_UP = '<svg viewBox="0 -960 960 960" width="11" height="11" fill=
 const DASH_ICON_DOWN = '<svg viewBox="0 -960 960 960" width="11" height="11" fill="currentColor"><path d="M450-800v526L202-522l-42 42 320 320 320-320-42-42-248 248v-526h-60Z"/></svg>';
 const DASH_ICON_NEUTRAL = '<svg viewBox="0 -960 960 960" width="11" height="11" fill="currentColor"><path d="M200-450v-60h560v60H200Z"/></svg>';
 
+/** Cor por estado do Raio-X (ícone, legenda e marcador da mensagem) — mesmas variáveis semânticas usadas no resto do app. */
+const RAIOX_STATE_COLORS = { normal: 'var(--success)', warning: 'var(--warning)', danger: 'var(--danger)' };
+
 /** Rótulos do perfil de investidor — mesmos textos usados no seletor de Planejamento (js/planning.js). */
 const INVESTOR_PROFILE_LABELS = { conservador: 'Conservador', equilibrado: 'Equilibrado', agressivo: 'Agressivo' };
 
@@ -142,33 +145,42 @@ const Dashboard = {
     }
   },
 
-  /** Chip compacto de lembrete na sidebar: texto em uma linha só (truncado
-      via CSS), clicável pra alternar entre resumido e completo (quebrando
-      linha), e um botão de excluir — versão abreviada do item completo
-      mostrado na central de notificações. */
+  /** Cartão de lembrete na sidebar: barra de acento chapada (sem cantos
+      arredondados, de propósito — ver .side-reminder-chip::before) colorida
+      por severidade ('urgente' vermelho / 'atencao' âmbar, ver
+      Calc.calculateReminders), título curto, contexto por extenso (sem
+      truncar — já vem pronto do Calc) e prazo relativo quando existir, mais
+      um badge de contagem quando o item vier agrupado (2+ lembretes do
+      mesmo tipo). O "x" dispensa o lembrete (com uma transição curta antes
+      de sumir da lista) — versão abreviada do item completo mostrado na
+      central de notificações. */
   _buildSidebarReminderChip(reminder) {
     const el = document.createElement('div');
-    el.className = 'side-reminder-chip';
+    el.className = `side-reminder-chip severity-${reminder.severidade}`;
     el.innerHTML = `
-      <span class="material-symbols-outlined" aria-hidden="true">${reminder.icon}</span>
-      <button type="button" class="side-reminder-text" title="Mostrar texto completo">${escapeHtml(reminder.texto)}</button>
+      <div class="side-reminder-main">
+        <div class="side-reminder-titulo">${escapeHtml(reminder.titulo)}${reminder.count ? `<span class="side-reminder-count-badge">${reminder.count} ocorrências</span>` : ''}</div>
+        <div class="side-reminder-contexto">${escapeHtml(reminder.contexto)}</div>
+        ${reminder.prazo ? `<div class="side-reminder-prazo">${escapeHtml(reminder.prazo)}</div>` : ''}
+      </div>
       <button class="side-reminder-dismiss" title="Excluir" aria-label="Excluir lembrete"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
     `;
-    const textBtn = el.querySelector('.side-reminder-text');
-    textBtn.addEventListener('click', () => {
-      const expanded = el.classList.toggle('is-expanded');
-      textBtn.title = expanded ? 'Recolher texto' : 'Mostrar texto completo';
+    el.querySelector('.side-reminder-dismiss').addEventListener('click', () => {
+      el.classList.add('is-done');
+      setTimeout(() => this.dismissNotification(reminder.id), 200);
     });
-    el.querySelector('.side-reminder-dismiss').addEventListener('click', () => this.dismissNotification(reminder.id));
     return el;
   },
 
   _buildNotifItem(reminder, isRead) {
     const el = document.createElement('div');
-    el.className = `notif-item${isRead ? ' is-read' : ''}`;
+    el.className = `notif-item severity-${reminder.severidade}${isRead ? ' is-read' : ''}`;
     el.innerHTML = `
-      <span class="notif-item-icon"><span class="material-symbols-outlined" aria-hidden="true">${reminder.icon}</span></span>
-      <span class="notif-item-text">${escapeHtml(reminder.texto)}</span>
+      <div class="notif-item-main">
+        <div class="notif-item-titulo">${escapeHtml(reminder.titulo)}${reminder.count ? `<span class="side-reminder-count-badge">${reminder.count} ocorrências</span>` : ''}</div>
+        <div class="notif-item-text">${escapeHtml(reminder.contexto)}</div>
+        ${reminder.prazo ? `<div class="side-reminder-prazo">${escapeHtml(reminder.prazo)}</div>` : ''}
+      </div>
       <div class="notif-item-actions">
         <button class="notif-action-btn" data-action="read" title="Marcar como lida" aria-label="Marcar como lida" ${isRead ? 'disabled' : ''}><span class="material-symbols-outlined" aria-hidden="true">done</span></button>
         <button class="notif-action-btn" data-action="dismiss" title="Ocultar" aria-label="Ocultar notificação"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
@@ -220,7 +232,44 @@ const Dashboard = {
     this._renderStatSparkline(data, 'renda', 'spark-renda', '#4B2E9E', oculto.renda);
     this._renderStatSparkline(data, 'gastos', 'spark-gastos', '#C0392B', false);
     this._renderStatSparkline(data, 'saldo', 'spark-saldo', '#1F9E6B', oculto.saldo);
-    this._renderStatSparkline(data, 'potencialInvestimento', 'spark-potencial', '#7C4DE0', false);
+    this._renderPotencialChart(data);
+  },
+
+  /**
+   * Gráfico de "Potencial de investimento" — ao contrário dos outros 3
+   * stat-cards (compactos, decorativos, ver _renderStatSparkline), este é
+   * `.wide` e é o único gráfico "hero" do Dashboard, então usa
+   * SimpleCharts.line() (o mesmo componente de "Evolução financeira", com
+   * eixos/grade/tooltip de verdade) em vez do sparkline sem eixo. Cor da
+   * linha usa o MESMO deltaPercent que decide a cor do texto "-N%" logo
+   * acima (_renderStatTrend) — as duas informações nunca podem discordar,
+   * porque vêm do mesmo número.
+   */
+  _renderPotencialChart(data) {
+    const container = document.getElementById('spark-potencial');
+    if (!container) return;
+    // Só pontos reais (arquivados + mês em andamento) — nunca projeção
+    // futura, mesma regra que o sparkline antigo já seguia. Filtra ANTES de
+    // montar labels/série, pra eixo X e valores nunca saírem descasados
+    // caso algum mês do histórico não tenha esse campo calculado.
+    const pontos = Calc.buildHistoricoComProjecao(data, 0)
+      .filter((h) => h.potencialInvestimento != null)
+      .map((h) => ({ mes: h.mes, valor: h.potencialInvestimento }));
+    if (pontos.length < 2) { container.innerHTML = ''; return; }
+
+    const { deltaPercent } = Calc.calculateStatTrend(data, 'potencialInvestimento');
+    const cor = deltaPercent < -0.05 ? 'var(--danger)' : deltaPercent > 0.05 ? 'var(--success)' : 'var(--purple-500)';
+    const tendencia = deltaPercent < -0.05 ? 'caindo' : deltaPercent > 0.05 ? 'subindo' : 'estável';
+
+    SimpleCharts.line('spark-potencial', {
+      labels: pontos.map((p) => formatMonthKeyShort(p.mes)),
+      monotone: true,
+      showYAxis: true,
+      labelFormatter: formatBRLShort,
+      emphasizeLastDot: true,
+      ariaLabel: `Potencial de investimento ${tendencia}, de ${formatBRL(pontos[0].valor)} para ${formatBRL(pontos[pontos.length - 1].valor)} ao longo do período.`,
+      series: [{ name: 'Potencial', data: pontos.map((p) => p.valor), color: cor, fillArea: true }],
+    });
   },
 
   /**
@@ -336,6 +385,7 @@ const Dashboard = {
     const limite = Calc.calculateCommitmentLimit(data);
     const nivel = limite ? Calc.calculateCommitmentLevel(percentComprometido, limite.percentual) : null;
     const state = (nivel === 'atingido' || nivel === 'ultrapassado') ? 'danger' : nivel === 'aproximando' ? 'warning' : 'normal';
+    const stateColor = RAIOX_STATE_COLORS[state];
 
     SimpleCharts.gauge('raiox-gauge', {
       pct,
@@ -345,8 +395,22 @@ const Dashboard = {
     });
     setText('raiox-gasto-total', formatBRL(gastos));
 
+    const icon = document.getElementById('raiox-icon');
+    if (icon) icon.style.color = stateColor;
+
+    const legend = document.getElementById('raiox-legend');
+    if (legend) {
+      legend.innerHTML = `
+        <span class="raiox-legend-item"><span class="raiox-legend-dot" style="background:${stateColor}"></span>Comprometido</span>
+        ${limite ? `<span class="raiox-legend-item"><span class="raiox-legend-swatch"></span>Limite (${limite.percentual}%)</span>` : ''}
+      `;
+    }
+
     const msgEl = document.getElementById('raiox-message');
-    if (msgEl) msgEl.textContent = buildRaioXMessage(percentComprometido, renda, gastos, limite, nivel);
+    if (msgEl) {
+      const { title, detail } = buildRaioXMessage(percentComprometido, renda, gastos, limite, nivel);
+      msgEl.innerHTML = `<span class="raiox-message-dot" style="background:${stateColor}"></span><span><strong>${escapeHtml(title)}</strong> ${escapeHtml(detail)}</span>`;
+    }
   },
 
   /**
@@ -479,29 +543,35 @@ const Dashboard = {
 
 };
 
+/**
+ * Mensagem do Raio-X, separada em título (curto, em negrito) + detalhe —
+ * pro card de "Renda comprometida" no Dashboard mostrar como um insight com
+ * marcador (ver Dashboard._renderRaioX), no mesmo padrão de outras leituras
+ * rápidas do app (ex.: alertas de Análises).
+ */
 function buildRaioXMessage(percentComprometido, renda, gastos, limite, nivel) {
   if (percentComprometido == null) {
-    return 'Ainda não é possível calcular o comprometimento da renda — cadastre uma fonte de renda.';
+    return { title: 'Sem dados suficientes.', detail: 'Cadastre uma fonte de renda para calcular o comprometimento.' };
   }
   if (limite && nivel) {
     if (nivel === 'ultrapassado') {
-      return `⚠️ Atenção: limite ultrapassado. Suas compras já comprometem ${formatPercent(percentComprometido)} da sua renda (limite configurado: ${limite.percentual}%).`;
+      return { title: 'Limite ultrapassado.', detail: `Suas compras já comprometem ${formatPercent(percentComprometido)} da sua renda (limite configurado: ${limite.percentual}%).` };
     }
     if (nivel === 'atingido') {
-      return `⚠️ Limite atingido: ${formatPercent(percentComprometido)} da sua renda comprometida (limite: ${limite.percentual}%).`;
+      return { title: 'Limite atingido.', detail: `${formatPercent(percentComprometido)} da sua renda comprometida (limite: ${limite.percentual}%).` };
     }
     if (nivel === 'aproximando') {
-      return `Você está se aproximando do seu limite de ${limite.percentual}% — hoje está em ${formatPercent(percentComprometido)}.`;
+      return { title: 'Aproximando do limite.', detail: `Você está se aproximando do seu limite de ${limite.percentual}% — hoje está em ${formatPercent(percentComprometido)}.` };
     }
-    return `Tudo dentro do combinado: ${formatPercent(percentComprometido)} da renda comprometida, abaixo do seu limite de ${limite.percentual}%.`;
+    return { title: 'Tudo dentro do combinado.', detail: `${formatPercent(percentComprometido)} da renda comprometida, abaixo do seu limite de ${limite.percentual}%.` };
   }
   if (percentComprometido >= 90) {
-    return `Sua renda está ${formatPercent(percentComprometido)} comprometida neste mês. A margem para gastos novos está muito reduzida.`;
+    return { title: 'Margem bem reduzida.', detail: `Sua renda está ${formatPercent(percentComprometido)} comprometida neste mês.` };
   }
   if (percentComprometido >= 70) {
-    return `Sua renda está ${formatPercent(percentComprometido)} comprometida neste mês. Vale acompanhar de perto os próximos gastos.`;
+    return { title: 'Vale acompanhar de perto.', detail: `Sua renda está ${formatPercent(percentComprometido)} comprometida neste mês.` };
   }
-  return `Sua renda está ${formatPercent(percentComprometido)} comprometida neste mês, deixando ${formatBRL(renda - gastos)} de margem.`;
+  return { title: 'Dentro do esperado.', detail: `Sua renda está ${formatPercent(percentComprometido)} comprometida, deixando ${formatBRL(renda - gastos)} de margem.` };
 }
 
 

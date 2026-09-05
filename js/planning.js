@@ -23,7 +23,10 @@ const Planning = {
     setText('next-month-gastos', formatBRL(proj.gastosPrevistos));
     setText('next-month-saldo', formatBRL(proj.saldoEstimado));
     setText('next-month-percentual', proj.percentual != null ? formatPercent(proj.percentual) : 'não informado');
-    setText('next-month-obs', proj.obsVariaveis);
+    const fill = document.getElementById('next-month-progress-fill');
+    if (fill) fill.style.width = `${Math.min(Math.max(proj.percentual || 0, 0), 100)}%`;
+    const obsEl = document.getElementById('next-month-obs');
+    if (obsEl) obsEl.innerHTML = `<span class="material-symbols-outlined" aria-hidden="true">info</span>${escapeHtml(proj.obsVariaveis)}`;
   },
 
   _renderDifference(data) {

@@ -33,8 +33,9 @@ async function initApp(session) {
   setupIncomeModal();
   setupProfileAvatar();
   setupGoalModal();
+  setupReservaModal();
   setupNotificationsModal();
-  setupAccountSection(session);
+  setupAccountSection();
   setupToggleGroupAria();
   setupModalAccessibility();
   setupReportModal();
@@ -162,11 +163,7 @@ function setupNotificationsModal() {
   });
 }
 
-function setupAccountSection(session) {
-  const emailEl = document.getElementById('account-email');
-  if (emailEl) emailEl.textContent = (session && session.user && session.user.email) || '—';
-
-  bindLogoutButton(document.getElementById('account-logout-btn'), false);
+function setupAccountSection() {
   bindLogoutButton(document.getElementById('side-logout-btn'), true);
 }
 
@@ -207,6 +204,17 @@ function setupGoalModal() {
   document.getElementById('goal-close-btn').addEventListener('click', () => Goals.closeForm());
   document.getElementById('goal-cancel-btn').addEventListener('click', () => Goals.closeForm());
   document.getElementById('goal-form').addEventListener('submit', (e) => Goals.submitForm(e));
+}
+
+function setupReservaModal() {
+  document.getElementById('reserva-close-btn').addEventListener('click', () => Profile.closeReservaModal());
+  document.getElementById('reserva-cancel-btn').addEventListener('click', () => Profile.closeReservaModal());
+  document.getElementById('reserva-form').addEventListener('submit', (e) => Profile.submitReservaModal(e));
+  document.getElementById('reserva-remove-btn').addEventListener('click', () => Profile.removeReserva());
+
+  document.getElementById('reserva-valor-close-btn').addEventListener('click', () => Profile.closeReservaValorModal());
+  document.getElementById('reserva-valor-cancel-btn').addEventListener('click', () => Profile.closeReservaValorModal());
+  document.getElementById('reserva-valor-form').addEventListener('submit', (e) => Profile.submitReservaValorModal(e));
 }
 
 function setupProfileAvatar() {

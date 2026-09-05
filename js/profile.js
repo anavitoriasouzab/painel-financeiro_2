@@ -14,7 +14,6 @@ const Profile = {
     this._renderGoalsSummary(data);
     this._renderCommitmentSettings(data);
     this._renderMargemSettings(data);
-    this._renderReservaEmergencia(data);
   },
 
   _renderCommitmentSettings(data) {
@@ -63,48 +62,21 @@ const Profile = {
     toast(margem == null ? 'Margem de segurança desativada.' : 'Margem de segurança salva.');
   },
 
-  /**
-   * Reserva de emergência: valor já guardado, meta e aporte mensal
-   * pretendido — só isso, sem nenhuma lógica nova de cálculo além da
-   * cobertura em meses (valorAtual / gastos do mês atual), mostrada como
-   * referência de quanto tempo essa reserva sustentaria o padrão de vida
-   * de hoje se a renda parasse.
-   */
-  _renderReservaEmergencia(data) {
-    const reserva = data.reservaEmergencia || {};
-    const checkbox = document.getElementById('reserva-possui');
-    const fields = document.getElementById('reserva-fields');
-    if (!checkbox || !fields) return;
-
-    checkbox.checked = !!reserva.possui;
-    fields.style.display = reserva.possui ? 'block' : 'none';
+  openReservaModal() {
+    const reserva = appData.reservaEmergencia || {};
     document.getElementById('reserva-valor-atual').value = reserva.valorAtual != null ? reserva.valorAtual : '';
     document.getElementById('reserva-meta-valor').value = reserva.metaValor != null ? reserva.metaValor : '';
     document.getElementById('reserva-valor-mensal').value = reserva.valorMensalDestinado != null ? reserva.valorMensalDestinado : '';
-
-    const pct = reserva.metaValor ? Math.min((reserva.valorAtual || 0) / reserva.metaValor * 100, 100) : 0;
-    const fill = document.getElementById('reserva-progress-fill');
-    if (fill) fill.style.width = `${pct}%`;
-    const progressLabel = document.getElementById('reserva-progress-label');
-    if (progressLabel) {
-      progressLabel.textContent = reserva.metaValor
-        ? `${formatBRL(reserva.valorAtual || 0)} / ${formatBRL(reserva.metaValor)}`
-        : (reserva.valorAtual ? formatBRL(reserva.valorAtual) : '—');
-    }
-    const mesesLabel = document.getElementById('reserva-meses-label');
-    if (mesesLabel) {
-      const meses = Calc.calculateEmergencyFundMonthsCovered(data);
-      mesesLabel.textContent = meses != null ? `Cobre ~${meses.toFixed(1)} mês(es) de gastos` : '';
-    }
+    document.getElementById('reserva-remove-btn').style.display = reserva.metaValor != null ? '' : 'none';
+    document.getElementById('reserva-modal').classList.add('active');
   },
 
-  toggleReservaFields() {
-    const checked = document.getElementById('reserva-possui').checked;
-    document.getElementById('reserva-fields').style.display = checked ? 'block' : 'none';
+  closeReservaModal() {
+    document.getElementById('reserva-modal').classList.remove('active');
   },
 
-  saveReserva() {
-    const possui = document.getElementById('reserva-possui').checked;
+  submitReservaModal(evt) {
+    evt.preventDefault();
     const parseOrNull = (id) => {
       const raw = document.getElementById(id).value;
       return raw === '' ? null : parseFloat(raw);
@@ -118,10 +90,59 @@ const Profile = {
         return;
       }
     }
-    appData.reservaEmergencia = { possui, valorAtual, metaValor, valorMensalDestinado };
+    if (metaValor == null) {
+      alert('Informe o valor da meta.');
+      return;
+    }
+    appData.reservaEmergencia = { possui: true, valorAtual, metaValor, valorMensalDestinado };
     Storage.save(appData);
-    this._renderReservaEmergencia(appData);
-    toast('Reserva de emergência salva.');
+    this.closeReservaModal();
+    Dashboard.render(appData);
+    Charts.render(appData);
+    toast('Meta de reserva salva.');
+  },
+
+  /**
+   * Popup rápido só pra atualizar "quanto já tenho guardado" (valorAtual) —
+   * sem passar pelo formulário completo de meta/aporte mensal. Só faz
+   * sentido com uma meta já configurada (o botão que abre isso nem aparece
+   * antes disso, ver Charts._renderReservaGoal).
+   */
+  openReservaValorModal() {
+    const reserva = appData.reservaEmergencia || {};
+    document.getElementById('reserva-valor-novo').value = reserva.valorAtual != null ? reserva.valorAtual : '';
+    document.getElementById('reserva-valor-modal').classList.add('active');
+  },
+
+  closeReservaValorModal() {
+    document.getElementById('reserva-valor-modal').classList.remove('active');
+  },
+
+  submitReservaValorModal(evt) {
+    evt.preventDefault();
+    const raw = document.getElementById('reserva-valor-novo').value;
+    const valorAtual = raw === '' ? null : parseFloat(raw);
+    if (valorAtual == null || Number.isNaN(valorAtual) || valorAtual < 0) {
+      alert('Informe um valor válido.');
+      return;
+    }
+    const reserva = appData.reservaEmergencia || {};
+    appData.reservaEmergencia = { ...reserva, possui: true, valorAtual };
+    Storage.save(appData);
+    this.closeReservaValorModal();
+    Dashboard.render(appData);
+    Charts.render(appData);
+    toast('Valor guardado atualizado.');
+  },
+
+  async removeReserva() {
+    if (!await confirmDialog('Remover a meta de reserva de emergência? O valor guardado e o aporte mensal configurados também serão apagados.', { title: 'Remover meta', confirmLabel: 'Remover', danger: true })) return;
+    appData.reservaEmergencia = { possui: false, valorAtual: null, metaValor: null, valorMensalDestinado: null };
+    Storage.save(appData);
+    this.closeReservaModal();
+    Dashboard.render(appData);
+    Charts.render(appData);
+    toast('Meta de reserva removida.');
   },
 
   _renderHeaderAvatar(data) {
