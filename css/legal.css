@@ -1,0 +1,28 @@
+/**
+ * legal.css
+ * -----------------------------------------------------------------------
+ * Só as páginas de conteúdo estático (termos.html, privacidade.html) —
+ * texto longo, então largura maior que o .auth-card (428px) do login, sem
+ * precisar do shader/canvas animado (conteúdo de leitura, não uma tela de
+ * vitrine).
+ */
+body { padding: 40px 20px 60px; }
+.legal-wrap { max-width: 720px; margin: 0 auto; }
+.legal-back { display: inline-flex; align-items: center; gap: 6px; color: var(--purple-text); font-weight: 600; font-size: 13px; text-decoration: none; margin-bottom: 16px; }
+.legal-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 28px 32px; box-shadow: var(--shadow-card); }
+.legal-card h1 { font-family: var(--font-display); font-size: 22px; margin: 0 0 6px; color: var(--text-primary); }
+.legal-card .legal-updated { font-size: 12.5px; color: var(--text-muted); margin-bottom: 24px; }
+.legal-card h2 { font-family: var(--font-display); font-size: 15px; margin: 28px 0 8px; color: var(--text-primary); }
+.legal-card p, .legal-card li { font-size: 13.5px; line-height: 1.6; color: var(--text-secondary); }
+.legal-card ul { margin: 8px 0; padding-left: 20px; }
+.legal-card strong { color: var(--text-primary); }
+
+/* Nota discreta no rodapé (não um banner de alerta) — o texto agora é
+   redigido pra valer, não um placeholder óbvio; só sinaliza a origem e
+   sugere revisão, sem gritar "rascunho" a cada visita à página. */
+.legal-footer-note {
+  display: flex; gap: 8px; align-items: flex-start;
+  color: var(--text-muted); font-size: 12px; line-height: 1.5;
+  margin: 20px 4px 0;
+}
+.legal-footer-note .material-symbols-outlined { font-size: 15px; flex-shrink: 0; margin-top: 1px; }

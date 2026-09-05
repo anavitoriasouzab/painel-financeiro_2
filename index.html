@@ -1117,6 +1117,28 @@
     </div>
   </div>
 
+  <!-- Modal de aceite de Termos/Privacidade — sem botão de fechar de propósito
+     (ver setupTermsModal em js/app.js): quem ainda não aceitou (perfil.
+     termosAceitosEm nulo, tanto conta nova quanto conta já existente) fica
+     bloqueada aqui até aceitar. Esc é suprimido especificamente pra esse
+     modal em setupModalAccessibility (js/app.js), senão fecharia sem aceitar. -->
+  <div class="modal-overlay" id="terms-modal" role="dialog" aria-modal="true" aria-labelledby="terms-modal-title">
+    <div class="modal-sheet">
+      <div class="modal-header">
+        <h3 id="terms-modal-title">Termos de Uso e Privacidade</h3>
+      </div>
+      <p class="muted-text" style="font-size:14px;line-height:1.5;">
+        Pra continuar usando o Painel Financeiro, você precisa ler e aceitar os
+        <a class="text-link" href="termos.html" target="_blank" rel="noopener">Termos de Uso</a> e a
+        <a class="text-link" href="privacidade.html" target="_blank" rel="noopener">Política de Privacidade</a>,
+        que descrevem como seus dados financeiros são tratados.
+      </p>
+      <div class="modal-actions">
+        <button type="button" class="primary-btn" id="terms-accept-btn" style="width:100%;">Li e aceito os Termos de Uso e a Política de Privacidade</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Modal: central de notificações (sino no header) — mesmos lembretes da sidebar, só que acessível em qualquer tamanho de tela -->
   <div class="modal-overlay" id="notifications-modal" role="dialog" aria-modal="true"
     aria-labelledby="notifications-title">

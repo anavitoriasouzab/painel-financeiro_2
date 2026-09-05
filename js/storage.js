@@ -18,7 +18,7 @@
  */
 
 const STORAGE_KEY = 'financas_app_v1'; // usado só para importar dados antigos de localStorage (ver load()).
-const SCHEMA_VERSION = 7;
+const SCHEMA_VERSION = 8;
 
 function generateId(prefix) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
@@ -120,6 +120,12 @@ function migrate(data) {
   if (!data.perfil) {
     data.perfil = { nome: null, foto: null };
   }
+  // Backup local antigo (pré-existente antes desta versão) não tem esse
+  // campo — nunca presume aceite, sempre cai no modal obrigatório (ver
+  // js/app.js) até a pessoa aceitar de fato.
+  if (data.perfil.termosAceitosEm === undefined) {
+    data.perfil.termosAceitosEm = null;
+  }
   if (!data.configuracoes.limiteComprometimento) {
     data.configuracoes.limiteComprometimento = { percentual: 80, modo: 'confirmacao' };
   }
@@ -160,6 +166,7 @@ function buildSeedData() {
     perfil: {
       nome: null,
       foto: null,
+      termosAceitosEm: null,
     },
 
     configuracoes: {
@@ -412,7 +419,7 @@ const Storage = {
         criadoEm: p.criado_em || new Date().toISOString(),
         mesReferenciaAtual: p.mes_referencia_atual || new Date().toISOString().slice(0, 7),
       },
-      perfil: { nome: p.nome ?? null, foto: p.foto ?? null },
+      perfil: { nome: p.nome ?? null, foto: p.foto ?? null, termosAceitosEm: p.termos_aceitos_em ?? null },
       configuracoes: {
         margemSeguranca: p.margem_seguranca ?? null,
         perfilInvestidor: p.perfil_investidor || 'equilibrado',
@@ -455,6 +462,7 @@ const Storage = {
       mes_referencia_atual: data.meta.mesReferenciaAtual,
       nome: data.perfil.nome,
       foto: data.perfil.foto,
+      termos_aceitos_em: data.perfil.termosAceitosEm || null,
       margem_seguranca: data.configuracoes.margemSeguranca,
       perfil_investidor: data.configuracoes.perfilInvestidor || 'equilibrado',
       limite_comprometimento_percentual: data.configuracoes.limiteComprometimento.percentual,

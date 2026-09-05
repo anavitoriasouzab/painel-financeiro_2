@@ -18,6 +18,8 @@ const AuthPage = {
       form: document.getElementById('auth-form'),
       fieldNome: document.getElementById('field-nome'),
       nome: document.getElementById('auth-nome'),
+      fieldTermos: document.getElementById('field-termos'),
+      termos: document.getElementById('auth-termos'),
       email: document.getElementById('auth-email'),
       senha: document.getElementById('auth-senha'),
       submitBtn: document.getElementById('auth-submit-btn'),
@@ -62,6 +64,7 @@ const AuthPage = {
       this.els.title.textContent = 'Criar sua conta';
       this.els.lede.textContent = 'Leva menos de um minuto — só e-mail e senha.';
       this.els.fieldNome.style.display = 'flex';
+      this.els.fieldTermos.style.display = 'flex';
       this.els.senha.setAttribute('autocomplete', 'new-password');
       this.els.senha.setAttribute('placeholder', 'Crie uma senha (mín. 6 caracteres)');
       this.els.submitLabel.textContent = 'Criar conta';
@@ -70,6 +73,11 @@ const AuthPage = {
       this.els.title.textContent = 'Bem-vindo(a) de volta';
       this.els.lede.textContent = 'Entre com seu e-mail para acessar seu painel.';
       this.els.fieldNome.style.display = 'none';
+      this.els.fieldTermos.style.display = 'none';
+      // Não deixa o aceite "vazar" de uma tentativa de cadastro pra outra
+      // (ex.: marcou, trocou pra "Entrar" e voltou pra "Criar conta" sem
+      // recarregar a página) — cada cadastro exige aceitar de novo.
+      this.els.termos.checked = false;
       this.els.senha.setAttribute('autocomplete', 'current-password');
       this.els.senha.setAttribute('placeholder', '••••••••');
       this.els.submitLabel.textContent = 'Entrar';
@@ -133,6 +141,10 @@ const AuthPage = {
     }
     if (senha.length < 6) {
       this._showMessage('A senha precisa ter pelo menos 6 caracteres.', 'error');
+      return;
+    }
+    if (this.mode === 'signup' && !this.els.termos.checked) {
+      this._showMessage('Você precisa aceitar os Termos de Uso e a Política de Privacidade.', 'error');
       return;
     }
 

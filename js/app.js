@@ -20,6 +20,15 @@ async function requireAuth() {
 
 async function initApp(session) {
   appData = await Storage.load(session.user.id);
+  // Bloqueia o app (modal sem botão de fechar, ver #terms-modal e
+  // setupTermsModal) até a pessoa aceitar Termos/Privacidade — vale tanto
+  // pra quem acabou de se cadastrar quanto pra conta que já existia antes
+  // dessa coluna existir (termosAceitosEm nasce null pras duas). O resto
+  // do app continua renderizando por baixo do overlay normalmente, mesmo
+  // padrão dos outros modais.
+  if (!appData.perfil.termosAceitosEm) {
+    document.getElementById('terms-modal').classList.add('active');
+  }
   renderAll();
   // A navegação e os modais precisam ser configurados mesmo que algum
   // render acima falhe por qualquer motivo — do contrário nenhum botão do
@@ -36,6 +45,7 @@ async function initApp(session) {
   setupReservaModal();
   setupNotificationsModal();
   setupAccountSection();
+  setupTermsModal();
   setupToggleGroupAria();
   setupModalAccessibility();
   setupReportModal();
@@ -107,6 +117,11 @@ function setupModalAccessibility() {
     if (!modal) return;
 
     if (e.key === 'Escape') {
+      // #terms-modal não tem botão de fechar de propósito (aceite
+      // obrigatório) — sem este guard, o fallback abaixo (nenhum botão de
+      // fechar encontrado = fecha do mesmo jeito) dispensaria o modal sem
+      // a pessoa aceitar nada.
+      if (modal.id === 'terms-modal') return;
       const dismissBtn = getDismissButton(modal);
       if (dismissBtn) dismissBtn.click();
       else modal.classList.remove('active');
@@ -165,6 +180,17 @@ function setupNotificationsModal() {
 
 function setupAccountSection() {
   bindLogoutButton(document.getElementById('side-logout-btn'), true);
+}
+
+/** Aceite obrigatório de Termos/Privacidade (ver #terms-modal, aberto em initApp quando appData.perfil.termosAceitosEm é null). */
+function setupTermsModal() {
+  const btn = document.getElementById('terms-accept-btn');
+  if (!btn) return;
+  btn.addEventListener('click', () => {
+    appData.perfil.termosAceitosEm = new Date().toISOString();
+    Storage.save(appData);
+    document.getElementById('terms-modal').classList.remove('active');
+  });
 }
 
 function bindLogoutButton(btn, askConfirmation) {

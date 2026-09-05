@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Política de Privacidade — Painel Financeiro</title>
+<link rel="icon" type="image/svg+xml" href="assets/pf-favicon.svg" />
+<script>
+  if (localStorage.getItem('financas_theme') !== 'light') {
+    document.documentElement.setAttribute('data-theme', 'dark');
+  }
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Inter:wght@400;500;600;700&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,400,1,0&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css" />
+<link rel="stylesheet" href="css/legal.css" />
+</head>
+<body>
+<div class="legal-wrap">
+  <a class="legal-back" href="login.html">
+    <span class="material-symbols-outlined" aria-hidden="true" style="font-size:16px;">arrow_back</span>
+    Voltar
+  </a>
+
+  <div class="legal-card">
+    <h1>Política de Privacidade</h1>
+    <div class="legal-updated">Última atualização: 2026-09-05</div>
+
+    <h2>1. Introdução e controlador dos dados</h2>
+    <p>Esta política explica como o Painel Financeiro coleta, usa, armazena e protege os dados pessoais e financeiros de quem usa o app, em conformidade com a Lei Geral de Proteção de Dados (LGPD, Lei 13.709/2018). Ao usar o app, você concorda com o tratamento de dados descrito aqui.</p>
+
+    <h2>2. Quais dados coletamos</h2>
+    <ul>
+      <li><strong>Dados de conta:</strong> e-mail, nome (quando informado) e, se você entrar com Google, as informações básicas de perfil fornecidas pelo Google (nome, e-mail, foto).</li>
+      <li><strong>Dados financeiros cadastrados por você:</strong> renda, despesas fixas e variáveis, parcelamentos, cartões, metas, reserva de emergência, categorias e histórico mensal.</li>
+      <li><strong>Preferências de uso:</strong> tema claro/escuro e outras configurações de interface, guardadas localmente no seu navegador.</li>
+    </ul>
+    <p>Não coletamos dados de localização, contatos, câmera/microfone, nem fazemos rastreamento para fins de publicidade.</p>
+
+    <h2>3. Base legal para o tratamento</h2>
+    <p>Tratamos seus dados com base (i) na <strong>execução de contrato</strong> — é necessário processar seus dados financeiros para o app funcionar — e (ii) no <strong>consentimento</strong> que você dá ao aceitar estes termos no cadastro (ou no primeiro acesso, para contas já existentes).</p>
+
+    <h2>4. Para que usamos seus dados</h2>
+    <p>Exclusivamente para operar o app: calcular e exibir seu painel financeiro, gráficos, projeções, lembretes e simulações. Não vendemos, alugamos nem compartilhamos seus dados financeiros com terceiros para fins de marketing ou publicidade.</p>
+
+    <h2>5. Onde e como seus dados ficam guardados</h2>
+    <p>Os dados são armazenados no <strong>Supabase</strong> (infraestrutura de banco de dados e autenticação, atuando como operador de dados nos termos da LGPD), com Row Level Security ativado em todas as tabelas — cada conta só consegue ler e editar os próprios dados, mesmo a nível de banco de dados, não apenas na interface do app. A comunicação entre o app e o banco de dados é feita por conexão criptografada (HTTPS/TLS).</p>
+
+    <h2>6. Por quanto tempo guardamos seus dados</h2>
+    <p>Seus dados ficam armazenados enquanto sua conta existir. Ao excluir sua conta (Perfil → Excluir todos os dados), todos os dados financeiros associados a ela são apagados permanentemente do banco de dados.</p>
+
+    <h2>7. Seus direitos como titular dos dados (LGPD)</h2>
+    <p>Você pode, a qualquer momento, diretamente no app:</p>
+    <ul>
+      <li><strong>Acessar e exportar</strong> uma cópia de todos os seus dados (Perfil → Backup, formato JSON);</li>
+      <li><strong>Corrigir</strong> qualquer informação incorreta, editando-a diretamente nas telas do app;</li>
+      <li><strong>Excluir</strong> permanentemente todos os seus dados (Perfil → Excluir todos os dados);</li>
+      <li><strong>Revogar o consentimento</strong>, o que implica encerrar sua conta, já que o tratamento dos dados financeiros é necessário para o funcionamento do serviço.</li>
+    </ul>
+    <p>Para outras solicitações relacionadas aos seus dados (portabilidade, informações sobre compartilhamento etc.), entre em contato pelo e-mail informado na seção 10.</p>
+
+    <h2>8. Compartilhamento com terceiros</h2>
+    <p>Só compartilhamos dados com prestadores de serviço estritamente necessários para operar o app:</p>
+    <ul>
+      <li><strong>Supabase</strong> — hospedagem do banco de dados e autenticação;</li>
+      <li><strong>Google</strong> — apenas se você optar por entrar/cadastrar com sua conta Google (login via OAuth).</li>
+    </ul>
+    <p>Não compartilhamos seus dados financeiros com nenhum outro terceiro, e não os utilizamos para treinar modelos de terceiros.</p>
+
+    <h2>9. Cookies e armazenamento local</h2>
+    <p>O app usa <code>localStorage</code> do navegador apenas para preferências de interface (tema claro/escuro) e para manter sua sessão de autenticação ativa — não para rastreamento, perfilamento ou publicidade. Nenhum cookie de terceiros é usado pelo app em si (fontes do Google Fonts podem ser carregadas do próprio Google, sujeitas à política de privacidade do Google).</p>
+
+    <h2>10. Contato e encarregado de dados</h2>
+    <p>Dúvidas, solicitações ou reclamações sobre esta política podem ser enviadas para <strong>ana.dev2026@gmail.com</strong>.</p>
+
+    <h2>11. Alterações nesta política</h2>
+    <p>Podemos atualizar esta Política de Privacidade periodicamente. Mudanças relevantes serão comunicadas dentro do app, e o uso continuado do serviço após uma atualização representa ciência da nova versão.</p>
+  </div>
+
+  <p class="legal-footer-note">
+    <span class="material-symbols-outlined" aria-hidden="true">info</span>
+    Este documento foi redigido com apoio de IA a partir das funcionalidades reais do app. Recomendamos revisão por um profissional jurídico (especialmente quanto à LGPD) antes de publicar o app para outras pessoas usarem.
+  </p>
+</div>
+</body>
+</html>
