@@ -249,10 +249,10 @@ etc.) — só precisa que os elementos do HTML já existam.
   `css/style.css` próximo à regra `.app-shell`)
 - Conteúdo principal (`.app-main`) deve se adaptar ao espaço restante,
   nunca sobrepor o menu
-- A `.bottom-nav` tem 6 itens e o rótulo de Planejamento é "Planos" só ali:
-  a palavra inteira não cabe em celular nenhum (em 320px sobram ~46px por
-  item pra um rótulo que precisa de ~66px) e era truncada com reticências. A
-  `.side-nav` do desktop continua com "Planejamento"
+- A `.bottom-nav` tem 5 itens e os rótulos por extenso. Não cabe um 6º:
+  com 6, "Planejamento" precisa de ~66px e em 320px sobram ~46px por item.
+  Perfil é alcançado pelo avatar do header, não pela barra (já foi tentado
+  como 6º item e desfeito)
 - `env(safe-area-inset-bottom)` SOMA na altura da `.bottom-nav`, nunca é
   só `padding-bottom` sobre uma altura fixa: com o `box-sizing: border-box`
   global, o inset seria descontado dos 68px e esmagaria ícone+rótulo no app

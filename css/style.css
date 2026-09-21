@@ -1032,25 +1032,17 @@ section.view.active { display: block; animation: view-fade-in 0.25s ease; }
   z-index: 20;
 }
 
-/* Cada item divide a largura em partes iguais e o rótulo trunca em vez de
-   empurrar a barra: com 5 itens e "Planejamento" no meio, num aparelho de
-   320-360px o texto estourava a largura e desalinhava a barra inteira. */
+/* Cada item divide a largura em partes iguais, pra barra não desalinhar
+   quando um rótulo é bem mais longo que os outros ("Planejamento"). Sem
+   truncar: com 5 itens a palavra inteira cabe — foi só enquanto existiu um
+   6º item (Perfil) que ela não coube, e esse item foi removido. */
 .bottom-nav .nav-item {
   flex: 1 1 0;
   min-width: 0;
   padding: 6px 4px;
 }
-.bottom-nav .nav-item > span {
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+.bottom-nav .nav-item > span { white-space: nowrap; }
 .bottom-nav .nav-item.add-btn { flex: 0 0 auto; }
-
-@media (max-width: 380px) {
-  .bottom-nav .nav-item { font-size: 9.5px; padding: 6px 2px; }
-}
 
 .nav-item {
   display: flex;
