@@ -360,7 +360,7 @@ const Dashboard = {
     if (deltaPercent == null) {
       // Sem 2 meses arquivados ainda não dá pra calcular uma variação real —
       // avisa isso explicitamente em vez de deixar o badge sumir em silêncio.
-      el.innerHTML = (data.historicoMensal || []).length < 2
+      el.innerHTML = Calc.historicoComMesAtual(data).length < 2
         ? '<span class="stat-delta is-pending">Ainda sem histórico suficiente</span>'
         : '';
       return;

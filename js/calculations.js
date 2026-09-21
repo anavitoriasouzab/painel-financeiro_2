@@ -323,20 +323,22 @@ const Calc = {
    * Evolução etc.); a projeção de "Próximo mês" do Planejamento continua
    * olhando só 1 mês à frente — ver `calculateNextMonthProjection`.
    */
-  buildHistoricoComProjecao(data, mesesAFrente = 3) {
-    const historico = data.historicoMensal || [];
+  /**
+   * Histórico de meses FECHADOS. Um snapshot do mês em andamento não é
+   * histórico: ele congela um valor que ainda vai mudar a cada lançamento.
+   * Se existir um (versões anteriores criavam um no primeiro carregamento),
+   * ele é descartado daqui — quem quiser o mês corrente usa
+   * `historicoComMesAtual`, que recalcula na hora.
+   */
+  historicoArquivado(data) {
     const mesAtual = data.meta.mesReferenciaAtual;
+    return (data.historicoMensal || []).filter((h) => h.mes !== mesAtual);
+  },
 
-    // O mês corrente só entra em historicoMensal quando a pessoa vira o mês
-    // ou salva um snapshot manual — sem isso, os gráficos de vários meses
-    // (Renda x gastos, Evolução mensal, Evolução do potencial) ficavam
-    // vazios pra qualquer usuário antes do primeiro fechamento de mês,
-    // mesmo já com renda/gastos lançados este mês. Acrescenta um ponto "ao
-    // vivo" pro mês atual (marcado com emAndamento, não com previsto — é
-    // dado real de agora, não projeção), a menos que ele já tenha sido
-    // salvo manualmente no histórico.
-    const mesAtualJaArquivado = historico.some((h) => h.mes === mesAtual);
-    const historicoComAtual = mesAtualJaArquivado ? historico : [...historico, {
+  /** Ponto "ao vivo" do mês corrente, sempre recalculado dos dados reais. */
+  snapshotMesAtual(data) {
+    const mesAtual = data.meta.mesReferenciaAtual;
+    return {
       mes: mesAtual,
       renda: this.calculateMonthlyIncome(data, mesAtual),
       gastos: this.calculateMonthlyExpenses(data, mesAtual),
@@ -344,10 +346,29 @@ const Calc = {
       percentualComprometido: this.calculateCommittedPercentage(data, mesAtual),
       potencialInvestimento: this.calculateInvestmentCapacityByProfile(data, mesAtual).valor,
       emAndamento: true,
-    }];
+    };
+  },
+
+  /**
+   * Meses fechados + o mês corrente ao vivo. É esta a série que TODA tela
+   * deve usar pra falar do mês corrente.
+   *
+   * Antes, um snapshot arquivado do mês em andamento tinha prioridade sobre
+   * o cálculo ao vivo — então os cartões do topo mostravam o gasto real e os
+   * gráficos (Dashboard e relatório) mostravam um número congelado e menor,
+   * que era exatamente a inconsistência "o relatório diz um valor e o
+   * dashboard outro".
+   */
+  historicoComMesAtual(data) {
+    return [...this.historicoArquivado(data), this.snapshotMesAtual(data)];
+  },
+
+  buildHistoricoComProjecao(data, mesesAFrente = 3) {
+    const historicoComAtual = this.historicoComMesAtual(data);
 
     if (!this.hasDataForNextMonth(data)) return historicoComAtual;
 
+    const mesAtual = data.meta.mesReferenciaAtual;
     const projecoes = [];
     for (let i = 1; i <= mesesAFrente; i++) {
       const mes = addMonths(mesAtual, i);
@@ -378,7 +399,9 @@ const Calc = {
    * (null se não houver pelo menos 2 meses registrados).
    */
   calculateStatTrend(data, field) {
-    const historico = data.historicoMensal || [];
+    // Com o mês corrente ao vivo: a tendência compara o que está
+    // acontecendo agora com o último mês fechado, não dois snapshots velhos.
+    const historico = this.historicoComMesAtual(data);
     let deltaPercent = null;
     if (historico.length >= 2) {
       const atual = historico[historico.length - 1][field];
@@ -839,7 +862,10 @@ const Calc = {
    * ("média dos últimos N meses"), nunca fingir que são sempre 6.
    */
   calculateAverageMonthlyExpenses(data, monthsBack = 6) {
-    const historico = (data.historicoMensal || []).slice(-monthsBack);
+    // historicoArquivado() e não data.historicoMensal: um snapshot do mês em
+    // andamento entrava na média e a puxava pra baixo, justamente o que o
+    // comentário acima dizia pra não fazer.
+    const historico = this.historicoArquivado(data).slice(-monthsBack);
     if (!historico.length) return { average: null, monthsUsed: 0 };
     return { average: sum(historico.map((h) => h.gastos)) / historico.length, monthsUsed: historico.length };
   },
@@ -869,7 +895,7 @@ const Calc = {
       alerts.push({ id: 'parcelamentos-terminando', icon: 'check_circle', tipo: 'success', texto: `Você tem ${upcoming.length} parcelamento(s) terminando este mês, liberando ${formatBRL(margem)}/mês a partir do próximo.` });
     }
 
-    const historico = data.historicoMensal || [];
+    const historico = this.historicoComMesAtual(data);
     if (historico.length >= 2) {
       const atual = historico[historico.length - 1];
       const anterior = historico[historico.length - 2];

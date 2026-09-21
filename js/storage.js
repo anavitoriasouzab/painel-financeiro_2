@@ -18,7 +18,7 @@
  */
 
 const STORAGE_KEY = 'financas_app_v1'; // usado só para importar dados antigos de localStorage (ver load()).
-const SCHEMA_VERSION = 9;
+const SCHEMA_VERSION = 10;
 
 function generateId(prefix) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
@@ -144,9 +144,16 @@ function migrate(data) {
     });
     data.schemaVersion = SCHEMA_VERSION;
   }
-  if (!data.historicoMensal || !data.historicoMensal.length) {
-    data.historicoMensal = [buildSnapshot(data, data.meta.mesReferenciaAtual)];
-  }
+  data.historicoMensal = data.historicoMensal || [];
+  // Schema 10: remove snapshot do mês EM ABERTO. Versões anteriores criavam
+  // um aqui no primeiro carregamento pra os gráficos não nascerem vazios —
+  // mas ele congelava renda/gastos daquele instante e nunca era atualizado,
+  // então os gráficos e a tabela de Análises mostravam um número menor que
+  // os cartões do topo (que sempre calcularam ao vivo). Hoje o mês corrente
+  // é sempre recalculado por Calc.historicoComMesAtual(), então o ponto
+  // aparece nos gráficos sem precisar ser arquivado — histórico é só mês
+  // fechado, arquivado na virada (Planning.turnMonth) ou manualmente.
+  data.historicoMensal = data.historicoMensal.filter((h) => h.mes !== data.meta.mesReferenciaAtual);
   if (!data.perfil) {
     data.perfil = { nome: null, foto: null };
   }
@@ -256,7 +263,9 @@ function buildSeedData() {
 
   // Snapshot do mês atual, calculado a partir dos próprios dados acima —
   // é o primeiro registro do histórico financeiro.
-  seed.historicoMensal = [buildSnapshot(seed, seed.meta.mesReferenciaAtual)];
+  // Sem snapshot do mês em aberto (ver migrate) — o mês corrente entra nos
+  // gráficos ao vivo, não arquivado.
+  seed.historicoMensal = [];
 
   return seed;
 }

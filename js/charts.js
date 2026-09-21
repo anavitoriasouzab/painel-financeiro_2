@@ -50,7 +50,7 @@ const Charts = {
     if (!variacaoEl) return;
     const { deltaPercent } = Calc.calculateStatTrend(data, 'gastos');
     if (deltaPercent == null) {
-      variacaoEl.innerHTML = (data.historicoMensal || []).length < 2
+      variacaoEl.innerHTML = Calc.historicoComMesAtual(data).length < 2
         ? '<span class="stat-delta is-pending">Ainda sem histórico suficiente</span>'
         : '<span class="stat-delta is-neutral">Sem variação</span>';
       return;
@@ -219,7 +219,7 @@ const Charts = {
     }
 
     const hist = Calc.buildHistoricoComProjecao(data);
-    const historico = data.historicoMensal || [];
+    const historico = Calc.historicoComMesAtual(data);
 
     const annotations = [];
     if (historico.length >= 2) {
@@ -355,7 +355,9 @@ const Charts = {
     const tbody = document.getElementById('history-table-body');
     if (!tbody) return;
     const limite = Calc.calculateCommitmentLimit(data);
-    tbody.innerHTML = data.historicoMensal.slice().reverse().map((h) => {
+    // Mês corrente ao vivo (ver Calc.historicoComMesAtual) — a tabela mostrava
+    // o snapshot congelado enquanto os cartões do topo mostravam o valor real.
+    tbody.innerHTML = Calc.historicoComMesAtual(data).slice().reverse().map((h) => {
       const pct = h.percentualComprometido;
       let badgeClass = 'success';
       if (pct != null) {
@@ -379,12 +381,13 @@ const Charts = {
     const selA = document.getElementById('compare-month-a');
     const selB = document.getElementById('compare-month-b');
     if (!selA || !selB) return;
-    const options = data.historicoMensal.map((h) => `<option value="${h.mes}">${formatMonthKeyShort(h.mes)}</option>`).join('');
+    const meses = Calc.historicoComMesAtual(data);
+    const options = meses.map((h) => `<option value="${h.mes}">${formatMonthKeyShort(h.mes)}</option>`).join('');
     selA.innerHTML = options;
     selB.innerHTML = options;
-    if (data.historicoMensal.length >= 2) {
-      selA.value = data.historicoMensal[data.historicoMensal.length - 2].mes;
-      selB.value = data.historicoMensal[data.historicoMensal.length - 1].mes;
+    if (meses.length >= 2) {
+      selA.value = meses[meses.length - 2].mes;
+      selB.value = meses[meses.length - 1].mes;
     }
     this._updateComparisonResult(data);
   },
@@ -394,8 +397,9 @@ const Charts = {
     const selB = document.getElementById('compare-month-b');
     const result = document.getElementById('compare-result');
     if (!selA || !selB || !result) return;
-    const a = data.historicoMensal.find((h) => h.mes === selA.value);
-    const b = data.historicoMensal.find((h) => h.mes === selB.value);
+    const meses = Calc.historicoComMesAtual(data);
+    const a = meses.find((h) => h.mes === selA.value);
+    const b = meses.find((h) => h.mes === selB.value);
     if (!a || !b) { result.innerHTML = ''; return; }
 
     // Mesma métrica (gastos) em dois pontos no tempo, não duas categorias

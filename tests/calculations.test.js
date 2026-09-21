@@ -634,6 +634,60 @@ assertEqual(grupoMetas && grupoMetas.titulo, '2 metas quase concluídas', 'calcu
 }
 
 // ---------------------------------------------------------------------
+// Mês corrente é SEMPRE ao vivo, nunca lido do histórico arquivado
+// Regressão: "o relatório diz um valor e o dashboard outro" — um snapshot
+// do mês em andamento ficava congelado e os gráficos/tabela o preferiam
+// ao cálculo real, enquanto os cartões do topo mostravam o valor certo.
+// ---------------------------------------------------------------------
+{
+  const comSnapshotVelho = baseData({
+    rendas: [{ valor: 2000, frequencia: 'mensal' }],
+    despesasVariaveis: [{ nome: 'Mercado', valor: 500, categoria: 'Alimentação', mesReferencia: mes }],
+    // Snapshot OBSOLETO do próprio mês corrente (gastos 100, quando o real é 500)
+    historicoMensal: [{ mes, renda: 2000, gastos: 100, saldo: 1900, percentualComprometido: 5 }],
+  });
+
+  const gastosReais = Calc.calculateMonthlyExpenses(comSnapshotVelho, mes);
+  assertEqual(gastosReais, 500, 'gastos do mês continuam vindo dos lançamentos reais');
+
+  const serie = Calc.buildHistoricoComProjecao(comSnapshotVelho);
+  const pontoAtual = serie.filter((h) => h.mes === mes);
+  assertEqual(pontoAtual.length, 1, 'mês corrente aparece UMA vez na série (não duplica com o arquivado)');
+  assertEqual(pontoAtual[0].gastos, 500, 'ponto do mês corrente ignora o snapshot obsoleto e usa o valor ao vivo');
+  assertEqual(pontoAtual[0].emAndamento, true, 'ponto do mês corrente vem marcado como em andamento');
+  assertEqual(pontoAtual[0].saldo, 1500, 'saldo do ponto ao vivo bate com calculateRemainingBalance');
+  assertEqual(
+    Calc.historicoArquivado(comSnapshotVelho).length,
+    0,
+    'historicoArquivado não devolve o mês em aberto'
+  );
+
+  // A média de gastos existe pra comparar com meses FECHADOS — incluir o mês
+  // em andamento (ainda incompleto) puxava a média pra baixo.
+  assertEqual(
+    Calc.calculateAverageMonthlyExpenses(comSnapshotVelho).monthsUsed,
+    0,
+    'média mensal ignora o mês em andamento mesmo quando ele está arquivado'
+  );
+}
+{
+  // Mês fechado de verdade + mês corrente em aberto: os dois aparecem, e o
+  // arquivado é preservado como está (é o registro definitivo daquele mês).
+  const data = baseData({
+    rendas: [{ valor: 2000, frequencia: 'mensal' }],
+    despesasVariaveis: [{ nome: 'Mercado', valor: 500, categoria: 'Alimentação', mesReferencia: mes }],
+    historicoMensal: [{ mes: '2026-08', renda: 2000, gastos: 400, saldo: 1600, percentualComprometido: 20 }],
+  });
+  const serie = Calc.historicoComMesAtual(data);
+  assertEqual(serie.map((h) => h.mes), ['2026-08', '2026-09'], 'série = meses fechados + mês corrente, em ordem');
+  assertEqual(serie[0].gastos, 400, 'mês fechado mantém o valor arquivado');
+  assertEqual(serie[1].gastos, 500, 'mês corrente vem ao vivo');
+  assertEqual(Calc.calculateStatTrend(data, 'gastos').deltaPercent, 25, 'tendência compara o mês corrente ao vivo com o último fechado');
+  assertEqual(Calc.calculateAverageMonthlyExpenses(data).monthsUsed, 1, 'média usa só o mês fechado');
+  assertEqual(Calc.calculateAverageMonthlyExpenses(data).average, 400, 'média = gastos do mês fechado');
+}
+
+// ---------------------------------------------------------------------
 // Resultado
 // ---------------------------------------------------------------------
 console.log(`\n${passed} passaram, ${failed} falharam.`);

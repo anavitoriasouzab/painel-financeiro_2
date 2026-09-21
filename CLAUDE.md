@@ -230,6 +230,12 @@ etc.) — só precisa que os elementos do HTML já existam.
   `resolvida: true` via `Storage` (ver `Dashboard._resolveInconsistencyIfAny`),
   e não só no estado local de notificações, que é escopado ao mês e volta
   na virada
+- `historicoMensal` guarda só mês FECHADO. O mês corrente nunca sai de lá:
+  toda tela que precise dele usa `Calc.historicoComMesAtual(data)`, que
+  recalcula ao vivo. Um snapshot do mês em andamento congela um número que
+  ainda vai mudar — foi o que fez gráficos e tabela mostrarem um gasto menor
+  que os cartões do topo. Para a média de meses fechados existe
+  `Calc.historicoArquivado(data)`
 - Cores e espaçamentos: reutilizar as variáveis CSS já definidas em
   `:root` (`css/style.css`) — não hardcodar valores novos
 
