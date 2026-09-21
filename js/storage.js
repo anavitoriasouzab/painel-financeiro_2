@@ -18,10 +18,23 @@
  */
 
 const STORAGE_KEY = 'financas_app_v1'; // usado só para importar dados antigos de localStorage (ver load()).
-const SCHEMA_VERSION = 8;
+const SCHEMA_VERSION = 9;
 
 function generateId(prefix) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+/** Converte uma data URL base64 em Blob, para poder subir ao bucket. */
+function dataUrlToBlob(dataUrl) {
+  const m = /^data:([^;,]+)?(;base64)?,(.*)$/s.exec(dataUrl || '');
+  if (!m) return null;
+  const mime = m[1] || 'image/jpeg';
+  const corpo = m[3];
+  if (!m[2]) return new Blob([decodeURIComponent(corpo)], { type: mime });
+  const bin = atob(corpo);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new Blob([bytes], { type: mime });
 }
 
 function camelToSnake(s) {
@@ -64,7 +77,11 @@ const ARRAY_TABLES = [
   // e ganharam uma constraint de unicidade (evita repetir despesa/parcelamento
   // idêntico).
   { table: 'despesas_recorrentes', key: 'despesasRecorrentes', rpcReplace: 'replace_despesas_recorrentes' },
-  { table: 'despesas_variaveis', key: 'despesasVariaveis' },
+  // Também atômica (migration 0016) — sem isso, converter uma despesa em
+  // parcelamento podia apagar a despesa e não criar o parcelamento, fazendo
+  // a compra sumir. Sem constraint de unicidade aqui de propósito: duas
+  // despesas variáveis idênticas no mesmo mês são legítimas.
+  { table: 'despesas_variaveis', key: 'despesasVariaveis', rpcReplace: 'replace_despesas_variaveis' },
   { table: 'parcelamentos', key: 'parcelamentos', rpcReplace: 'replace_parcelamentos' },
   { table: 'metas', key: 'metas' },
   { table: 'investimentos', key: 'investimentos' },
@@ -104,6 +121,19 @@ function migrate(data) {
   data.investimentos = data.investimentos || [];
   data.pendencias = data.pendencias || [];
   data.inconsistenciasDetectadas = data.inconsistenciasDetectadas || [];
+  // Schema 9: colapsa inconsistências com a MESMA descrição numa só. Nada
+  // impedia a mesma inconsistência de ser registrada várias vezes, e como
+  // cada linha vira um lembrete "urgente" próprio (ver
+  // Calc.calculateReminders), uma única divergência aparecia repetida N vezes
+  // na central de notificações. Uma resolvida vence: se qualquer cópia já
+  // estava marcada como resolvida, a que sobra também está.
+  const porDescricao = new Map();
+  data.inconsistenciasDetectadas.forEach((i) => {
+    const existente = porDescricao.get(i.descricao);
+    if (existente) existente.resolvida = existente.resolvida || i.resolvida;
+    else porDescricao.set(i.descricao, i);
+  });
+  data.inconsistenciasDetectadas = Array.from(porDescricao.values());
   if (!data.schemaVersion || data.schemaVersion < 2) {
     (data.despesasRecorrentes || []).forEach((d) => {
       if (d.status === undefined) d.status = 'Pendente';
@@ -321,9 +351,149 @@ const Storage = {
     return JSON.stringify(appData, null, 2);
   },
 
+  /** Remove tudo que a conta tem no bucket (usado por clearAll). */
+  async _removeAllImages(uid) {
+    try {
+      const paths = [];
+      for (const tipo of ['comprovante', 'foto']) {
+        const { data, error } = await supabaseClient.storage.from(this.IMAGE_BUCKET).list(`${uid}/${tipo}`, { limit: 1000 });
+        if (error) throw error;
+        (data || []).forEach((o) => paths.push(`${uid}/${tipo}/${o.name}`));
+      }
+      if (paths.length) await supabaseClient.storage.from(this.IMAGE_BUCKET).remove(paths);
+      this._signedUrls.clear();
+    } catch (e) {
+      // Não impede o resto do "excluir todos os dados" de acontecer.
+      console.error('Falha ao limpar as imagens do bucket.', e);
+    }
+  },
+
+  // ======================= Imagens (Supabase Storage) =======================
+  // Comprovante de despesa e foto de perfil ficam no bucket privado `imagens`
+  // (ver supabase/migrations/0015_storage_imagens.sql). As colunas
+  // `despesas_variaveis.comprovante` e `perfil.foto` continuam sendo a única
+  // referência à imagem, só que agora guardam o PATH do objeto em vez do
+  // base64 inteiro. Como o resto do app nunca fala com o Supabase direto,
+  // toda a conversão path <-> src exibível mora aqui.
+
+  IMAGE_BUCKET: 'imagens',
+  _signedUrls: new Map(), // path -> { url, expiraEm }
+
+  /** true para o formato ANTIGO (imagem embutida na própria coluna). */
+  isDataUrl(valor) {
+    return typeof valor === 'string' && valor.startsWith('data:');
+  },
+
+  /**
+   * Converte o que está salvo na coluna em algo que um <img src> aceita.
+   * Base64 antigo volta como está; path vira URL assinada de curta duração
+   * (o bucket é privado, não existe URL pública). As URLs são cacheadas em
+   * memória porque as listas do app re-renderizam bastante — sem isso, cada
+   * render de Contas pediria uma assinatura nova por comprovante.
+   */
+  async imageSrc(valor) {
+    if (!valor) return null;
+    if (this.isDataUrl(valor)) return valor;
+    const cache = this._signedUrls.get(valor);
+    if (cache && cache.expiraEm > Date.now()) return cache.url;
+    const { data, error } = await supabaseClient.storage
+      .from(this.IMAGE_BUCKET)
+      .createSignedUrl(valor, 3600);
+    if (error || !data) {
+      console.error('Falha ao gerar URL da imagem.', error);
+      return null;
+    }
+    // Expira o cache antes da URL de fato vencer, pra nunca devolver uma
+    // assinatura que morre no meio do carregamento da imagem.
+    this._signedUrls.set(valor, { url: data.signedUrl, expiraEm: Date.now() + 50 * 60 * 1000 });
+    return data.signedUrl;
+  },
+
+  /** Sobe um File/Blob e devolve o path a guardar na coluna. `tipo` só organiza o bucket ('comprovante' | 'foto'). */
+  async uploadImage(file, tipo) {
+    const uid = await this._resolveUserId();
+    const ext = (file.type && file.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg');
+    // O user_id PRECISA ser o primeiro segmento: é nele que as policies do
+    // bucket se apoiam pra decidir quem é o dono (ver a migration 0015).
+    const path = `${uid}/${tipo}/${generateId(tipo)}.${ext}`;
+    const { error } = await supabaseClient.storage
+      .from(this.IMAGE_BUCKET)
+      .upload(path, file, { contentType: file.type || 'image/jpeg', upsert: false });
+    if (error) throw error;
+    return path;
+  },
+
+  /** Apaga o objeto do bucket. Valor em base64 (formato antigo) não tem objeto nenhum pra apagar. */
+  async removeImage(valor) {
+    if (!valor || this.isDataUrl(valor)) return;
+    this._signedUrls.delete(valor);
+    const { error } = await supabaseClient.storage.from(this.IMAGE_BUCKET).remove([valor]);
+    if (error) console.error('Falha ao remover imagem do bucket.', error);
+  },
+
+  /**
+   * Imagem como base64, para o backup em JSON continuar self-contained: um
+   * path só faz sentido dentro desta conta, então exportar o path deixaria o
+   * backup sem as imagens (e um import em outra conta apontando pra objetos
+   * que ela não pode ler). Ver Backup.exportJSON.
+   */
+  async imageAsDataUrl(valor) {
+    if (!valor) return null;
+    if (this.isDataUrl(valor)) return valor;
+    const { data, error } = await supabaseClient.storage.from(this.IMAGE_BUCKET).download(valor);
+    if (error || !data) {
+      console.error('Falha ao baixar imagem para o backup.', error);
+      return null;
+    }
+    return await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target.result);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(data);
+    });
+  },
+
+  /**
+   * Conversão única do formato antigo: sobe pro bucket toda imagem que ainda
+   * está em base64 e troca o valor da coluna pelo path. Roda depois do load
+   * (ver initApp em js/app.js) e é idempotente — numa base já convertida não
+   * encontra nada e não grava nada.
+   *
+   * Uma falha de upload NÃO derruba o app nem apaga a imagem: aquele item
+   * simplesmente continua em base64 (que o resto do app ainda sabe exibir) e
+   * tenta de novo no próximo carregamento.
+   */
+  async migrateBase64Images(data) {
+    const pendentes = [];
+    (data.despesasVariaveis || []).forEach((d) => {
+      if (this.isDataUrl(d.comprovante)) pendentes.push({ set: (v) => { d.comprovante = v; }, valor: d.comprovante, tipo: 'comprovante' });
+    });
+    if (data.perfil && this.isDataUrl(data.perfil.foto)) {
+      pendentes.push({ set: (v) => { data.perfil.foto = v; }, valor: data.perfil.foto, tipo: 'foto' });
+    }
+    if (!pendentes.length) return 0;
+
+    let convertidas = 0;
+    for (const item of pendentes) {
+      try {
+        const blob = dataUrlToBlob(item.valor);
+        if (!blob) continue;
+        item.set(await this.uploadImage(blob, item.tipo));
+        convertidas++;
+      } catch (e) {
+        console.error('Falha ao converter imagem para o Storage (segue em base64).', e);
+      }
+    }
+    if (convertidas) await this.save(data);
+    return convertidas;
+  },
+
   /** Apaga todos os dados da conta atual (usado em "Excluir todos os dados", com confirmação dupla). */
   async clearAll() {
     const uid = await this._resolveUserId();
+    // Apagar os dados tem que levar as imagens junto — elas não estão mais
+    // dentro das linhas, então um delete nas tabelas não as alcança mais.
+    await this._removeAllImages(uid);
     await Promise.all([
       ...ARRAY_TABLES.map((t) => supabaseClient.from(t.table).delete().eq('user_id', uid)),
       supabaseClient.from('perfil').delete().eq('user_id', uid),
@@ -528,7 +698,7 @@ const Storage = {
     const { error } = await supabaseClient.rpc(conf.rpcReplace, { p_user_id: uid, p_rows: rows });
     if (error) {
       if (error.code === '23505') {
-        const err = new Error(`Duas entradas em "${conf.table.replace(/_/g, ' ')}" ficaram com o mesmo nome, categoria e valor — ajuste uma delas antes de salvar.`);
+        const err = new Error(`Já existe um registro em "${conf.table.replace(/_/g, ' ')}" com o mesmo nome, categoria e valor — mude um deles (o nome, por exemplo) e salve de novo.`);
         err.userFacing = true;
         throw err;
       }

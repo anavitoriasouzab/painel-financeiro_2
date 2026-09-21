@@ -50,6 +50,14 @@ async function initApp(session) {
   setupModalAccessibility();
   setupReportModal();
   setupUnsavedChangesGuard();
+
+  // Conversão única das imagens em base64 pro Supabase Storage (ver
+  // Storage.migrateBase64Images). Sem await de propósito: o app já está
+  // utilizável, e numa base sem imagem antiga isso não faz nem uma
+  // requisição. Só re-renderiza se algo de fato mudou de formato.
+  Storage.migrateBase64Images(appData)
+    .then((n) => { if (n) renderAll(); })
+    .catch((e) => console.error('Falha na conversão de imagens para o Storage.', e));
 }
 
 /**
@@ -180,6 +188,10 @@ function setupNotificationsModal() {
 
 function setupAccountSection() {
   bindLogoutButton(document.getElementById('side-logout-btn'), true);
+  // Mesmo logout, para telas em que a .side-nav não existe (ver .mobile-only
+  // em css/style.css) — os dois botões estão sempre no DOM, só um aparece
+  // por vez, então ligar os dois aqui não duplica nada em tela nenhuma.
+  bindLogoutButton(document.getElementById('profile-logout-btn'), true);
 }
 
 /** Aceite obrigatório de Termos/Privacidade (ver #terms-modal, aberto em initApp quando appData.perfil.termosAceitosEm é null). */
@@ -290,6 +302,9 @@ function setupExpenseModal() {
       typeToggle.querySelectorAll('button').forEach((b) => b.classList.toggle('active', b === btn));
       document.getElementById('expense-type').value = btn.dataset.type;
       document.getElementById('field-vencimento').style.display = btn.dataset.type === 'recorrente' ? 'block' : 'none';
+      // Recorrente não tem parcela — o bloco de "compra parcelada" precisa
+      // sumir (e desmarcar) ao trocar o tipo, não só ao abrir o formulário.
+      Accounts._toggleParceladoFields();
     });
   });
 
@@ -307,6 +322,13 @@ function setupInstallmentModal() {
   document.getElementById('installment-close-btn').addEventListener('click', () => Installments.closeForm());
   document.getElementById('installment-cancel-btn').addEventListener('click', () => Installments.closeForm());
   document.getElementById('installment-form').addEventListener('submit', (e) => Installments.submitForm(e));
+
+  // "Da parcela" x "Total da compra": só muda como o valor digitado é lido
+  // (ver Installments.setValorModo) — o que fica gravado é sempre a parcela.
+  const modoToggle = document.getElementById('installment-valor-modo');
+  if (modoToggle) modoToggle.querySelectorAll('button').forEach((btn) => {
+    btn.addEventListener('click', () => Installments.setValorModo(btn.dataset.modo));
+  });
 }
 
 function setupCardModal() {

@@ -432,6 +432,208 @@ assertEqual(grupoMetas && grupoMetas.count, 2, 'calculateReminders: grupo de met
 assertEqual(grupoMetas && grupoMetas.titulo, '2 metas quase concluídas', 'calculateReminders: título do grupo de metas');
 
 // ---------------------------------------------------------------------
+// Parcelamento só conta no mês em que é cobrado — regressão do bug
+// "total da categoria não bate com a soma das linhas daquele mês"
+// ---------------------------------------------------------------------
+{
+  // mês de referência atual = 2026-09 (ver `mes` acima).
+  const data = baseData({
+    parcelamentos: [
+      // Termina neste mês (parcela 2/2) e começou em agosto.
+      { nome: 'Bigazine', valorParcela: 70.5, categoria: 'Parcelas', parcelaAtual: 2, totalParcelas: 2, parcelasRestantes: 0 },
+      // Começou em setembro (parcela 1/6), ainda corre até fevereiro.
+      { nome: 'Notebook', valorParcela: 250, categoria: 'Parcelas', parcelaAtual: 1, totalParcelas: 6, parcelasRestantes: 5 },
+    ],
+  });
+
+  assertEqual(Calc.calculateInstallmentsMonthlyTotal(data), 320.5, 'parcelas do mês atual: soma as duas (comportamento antigo preservado)');
+  assertEqual(Calc.calculateInstallmentsMonthlyTotal(data, '2026-08'), 70.5, 'mês passado: só a que já existia (Notebook ainda não tinha começado)');
+  assertEqual(Calc.calculateInstallmentsMonthlyTotal(data, '2026-10'), 250, 'mês seguinte: a encerrada sai da conta');
+  assertEqual(Calc.calculateInstallmentsMonthlyTotal(data, '2027-03'), 0, 'depois da última parcela: nada sobra');
+
+  const catAgosto = Calc.calculateCategoryBreakdown(data, '2026-08');
+  assertEqual(catAgosto[0].valor, 70.5, 'categoria num mês passado bate com a soma das parcelas cobradas naquele mês');
+
+  const topAgosto = Calc.calculateTopExpenses(data, '2026-08');
+  assertEqual(topAgosto.length, 1, 'maiores despesas de um mês passado não listam parcelamento que ainda não existia');
+
+  assertEqual(
+    Calc.calculateMonthlyExpenses(data, '2026-10'),
+    250,
+    'despesas do mês seguinte não carregam a parcela já encerrada'
+  );
+}
+{
+  // Sem parcelaAtual/parcelasRestantes não dá pra saber o intervalo — o
+  // parcelamento continua contando, em vez de o app inventar um prazo.
+  const data = baseData({ parcelamentos: [{ nome: 'Sem prazo', valorParcela: 100, categoria: 'Outros' }] });
+  assertEqual(Calc.calculateInstallmentsMonthlyTotal(data, '2026-01'), 100, 'sem prazo cadastrado: conta no passado (não inventa início)');
+  assertEqual(Calc.calculateInstallmentsMonthlyTotal(data, '2027-12'), 100, 'sem prazo cadastrado: conta no futuro (não inventa fim)');
+}
+
+// ---------------------------------------------------------------------
+// calculateFutureCommitments — compromissos já contratados além deste mês
+// ---------------------------------------------------------------------
+{
+  const data = baseData({
+    rendas: [{ valor: 2000, frequencia: 'mensal' }],
+    parcelamentos: [
+      { nome: 'Notebook', valorParcela: 250, parcelasRestantes: 4 },   // 1000
+      { nome: 'Saúde', valorParcela: 190, parcelasRestantes: 1 },      // 190
+      { nome: 'Acabando', valorParcela: 111, parcelasRestantes: 0 },   // nada além deste mês
+    ],
+  });
+  const fut = Calc.calculateFutureCommitments(data);
+  assertEqual(fut.total, 1190, 'calculateFutureCommitments: soma valorParcela × parcelasRestantes');
+  assertEqual(fut.itens, 2, 'calculateFutureCommitments: parcelamento que acaba neste mês não entra');
+  assertEqual(fut.mesesDeRenda, 0.595, 'calculateFutureCommitments: total dividido pela renda do mês');
+  assertEqual(fut.ultimoMes, '2027-01', 'calculateFutureCommitments: último mês vem do maior prazo restante');
+  assertEqual(fut.semPrazo, 0, 'calculateFutureCommitments: nada sem prazo aqui');
+}
+{
+  const data = baseData({ parcelamentos: [{ nome: 'Sem prazo', valorParcela: 100 }] });
+  const fut = Calc.calculateFutureCommitments(data);
+  assertEqual(fut.total, 0, 'calculateFutureCommitments: parcelamento sem prazo não é chutado no total');
+  assertEqual(fut.semPrazo, 1, 'calculateFutureCommitments: parcelamento sem prazo é sinalizado à parte');
+  assertEqual(fut.mesesDeRenda, null, 'calculateFutureCommitments: sem renda cadastrada não inventa proporção');
+  assertEqual(fut.ultimoMes, null, 'calculateFutureCommitments: sem prazo conhecido não inventa mês final');
+}
+
+// ---------------------------------------------------------------------
+// installmentLabelForMonth / calculateMonthPurchases
+// (extrato "Compras do mês" do relatório — seção 05)
+// ---------------------------------------------------------------------
+{
+  // mês de referência atual = 2026-09 (ver `mes` acima).
+  const data = baseData({
+    despesasRecorrentes: [{ nome: 'Aluguel', valor: 1200, categoria: 'Moradia', status: 'Pago' }],
+    despesasVariaveis: [
+      { nome: 'Farmácia', valor: 80, categoria: 'Saúde', mesReferencia: '2026-09' },
+      { nome: 'Uber', valor: 35, categoria: 'Transporte', mesReferencia: '2026-08' },
+    ],
+    parcelamentos: [
+      { nome: 'Notebook', valorParcela: 250, categoria: 'Compras', parcelaAtual: 3, totalParcelas: 6, parcelasRestantes: 3 },
+    ],
+  });
+
+  // Parcela 3/6 no mês atual → 2/6 no mês anterior, 4/6 no seguinte.
+  const p = data.parcelamentos[0];
+  assertEqual(Calc.installmentLabelForMonth(p, '2026-09', mes), '3/6', 'installmentLabelForMonth: parcela do mês de referência');
+  assertEqual(Calc.installmentLabelForMonth(p, '2026-08', mes), '2/6', 'installmentLabelForMonth: mês anterior recua uma parcela');
+  assertEqual(Calc.installmentLabelForMonth(p, '2026-10', mes), '4/6', 'installmentLabelForMonth: mês seguinte avança uma parcela');
+  assertEqual(Calc.installmentLabelForMonth(p, '2027-01', mes), '7/6', 'installmentLabelForMonth: não trava no total (mês fora da janela)');
+  assertEqual(
+    Calc.installmentLabelForMonth({ valorParcela: 10, parcelasRestantes: 2 }, '2026-09', mes),
+    null,
+    'installmentLabelForMonth: sem parcelaAtual não chuta número de parcela'
+  );
+  assertEqual(
+    Calc.installmentLabelForMonth({ valorParcela: 10, parcelaAtual: 2, parcelasRestantes: 2 }, '2026-09', mes),
+    '2',
+    'installmentLabelForMonth: sem totalParcelas mostra só o número da parcela'
+  );
+
+  const set = Calc.calculateMonthPurchases(data, '2026-09');
+  assertEqual(set.itens.length, 3, 'calculateMonthPurchases: recorrente + variável do mês + parcela ativa');
+  assertEqual(set.itens.map((i) => i.nome), ['Aluguel', 'Notebook', 'Farmácia'], 'calculateMonthPurchases: ordena do maior valor pro menor');
+  assertEqual(set.itens.map((i) => i.tipo), ['Recorrente', 'Parcelada', 'Única'], 'calculateMonthPurchases: marca o tipo de cada cobrança');
+  assertEqual(set.itens.map((i) => i.parcela), [null, '3/6', null], 'calculateMonthPurchases: só a compra parcelada traz rótulo de parcela');
+  assertEqual(set.total, 1530, 'calculateMonthPurchases: total = 1200 + 250 + 80');
+
+  // O ponto principal: o total do extrato SEMPRE tem que bater com os gastos
+  // do mês do resumo — é o que essa seção do relatório serve pra justificar.
+  assertEqual(
+    set.total,
+    Calc.calculateMonthlyExpenses(data, '2026-09'),
+    'calculateMonthPurchases: total fecha com calculateMonthlyExpenses do mesmo mês'
+  );
+  assertEqual(
+    Calc.calculateMonthPurchases(data, '2026-08').total,
+    Calc.calculateMonthlyExpenses(data, '2026-08'),
+    'calculateMonthPurchases: total fecha com os gastos também num mês passado'
+  );
+  assertEqual(
+    Calc.calculateMonthPurchases(data, '2026-08').itens.map((i) => i.nome),
+    ['Aluguel', 'Notebook', 'Uber'],
+    'calculateMonthPurchases: num mês passado pega a variável daquele mês, não a do mês atual'
+  );
+  assertEqual(
+    Calc.calculateMonthPurchases(data, '2027-06').itens.map((i) => i.nome),
+    ['Aluguel'],
+    'calculateMonthPurchases: depois da última parcela só sobra a recorrente'
+  );
+}
+
+// ---------------------------------------------------------------------
+// Compra parcelada cadastrada pelo formulário de despesa: total ÷ vezes,
+// com a 1ª parcela caindo no mês certo (ver Accounts._submitAsInstallment).
+// Aqui só a matemática do deslocamento, que é o que mora em Calc.
+// ---------------------------------------------------------------------
+{
+  const data = baseData({ cartoes: [{ id: 'c1', nome: 'Nubank', diaFechamento: 20 }] });
+
+  // Compra antes do fechamento → entra na fatura do próprio mês (offset 0).
+  assertEqual(Calc.calculateExpenseMonth(data, '2026-09-05', 'cartao', 'c1'), '2026-09', 'compra antes do fechamento: 1ª parcela no mês atual');
+  // Compra no dia do fechamento ou depois → fatura do mês seguinte (offset 1).
+  assertEqual(Calc.calculateExpenseMonth(data, '2026-09-25', 'cartao', 'c1'), '2026-10', 'compra depois do fechamento: 1ª parcela no mês seguinte');
+
+  // R$ 100 em 2x cuja 1ª parcela só cai em outubro: parcelaAtual 0 e
+  // parcelasRestantes 2 devem produzir cobrança em out e nov, nada em set.
+  const parcelado = baseData({
+    parcelamentos: [{ nome: 'Compra 2x', valorParcela: 50, categoria: 'Compras', parcelaAtual: 0, totalParcelas: 2, parcelasRestantes: 2 }],
+  });
+  assertEqual(Calc.calculateInstallmentsMonthlyTotal(parcelado, '2026-09'), 0, 'parcelaAtual 0: nada é cobrado no mês atual');
+  assertEqual(Calc.calculateInstallmentsMonthlyTotal(parcelado, '2026-10'), 50, 'parcelaAtual 0: 1ª parcela cai no mês seguinte');
+  assertEqual(Calc.calculateInstallmentsMonthlyTotal(parcelado, '2026-11'), 50, 'parcelaAtual 0: 2ª (e última) parcela no mês depois');
+  assertEqual(Calc.calculateInstallmentsMonthlyTotal(parcelado, '2026-12'), 0, 'parcelaAtual 0: acaba depois de exatamente 2 cobranças');
+  assertEqual(
+    Calc.installmentLabelForMonth(parcelado.parcelamentos[0], '2026-10', mes),
+    '1/2',
+    'parcelaAtual 0: a cobrança do mês seguinte é rotulada como parcela 1/2'
+  );
+
+  // Compra de 3 meses atrás em 6x: parcelaAtual 4, restantes 2 — soma das
+  // cobranças restantes + já pagas tem que dar as 6 parcelas.
+  const antiga = baseData({
+    parcelamentos: [{ nome: 'Compra 6x', valorParcela: 100, categoria: 'Compras', parcelaAtual: 4, totalParcelas: 6, parcelasRestantes: 2 }],
+  });
+  assertEqual(Calc.calculateInstallmentsMonthlyTotal(antiga, '2026-06'), 100, 'compra de 3 meses atrás: 1ª parcela em junho');
+  assertEqual(Calc.calculateInstallmentsMonthlyTotal(antiga, '2026-05'), 0, 'compra de 3 meses atrás: nada antes da 1ª parcela');
+  assertEqual(Calc.calculateInstallmentsMonthlyTotal(antiga, '2026-11'), 100, 'compra de 3 meses atrás: última parcela em novembro');
+  assertEqual(Calc.calculateInstallmentsMonthlyTotal(antiga, '2026-12'), 0, 'compra de 3 meses atrás: nada depois da 6ª parcela');
+}
+
+// ---------------------------------------------------------------------
+// Converter uma despesa JÁ CADASTRADA em parcelamento
+// (Accounts._submitAsInstallment com despesaOrigemId): o deslocamento é
+// sempre relativo ao mês de referência atual, não à data da conversão.
+// ---------------------------------------------------------------------
+{
+  // Despesa de R$ 300 lançada em AGOSTO, convertida em 3x estando em
+  // setembro (mês de referência atual = 2026-09). Agosto foi a 1ª parcela,
+  // logo setembro é a 2ª: parcelaAtual 2, parcelasRestantes 1.
+  const convertida = { nome: 'Compra de agosto', valorParcela: 100, categoria: 'Compras', parcelaAtual: 2, totalParcelas: 3, parcelasRestantes: 1 };
+  const data = baseData({ parcelamentos: [convertida] });
+
+  assertEqual(Calc.calculateInstallmentsMonthlyTotal(data, '2026-07'), 0, 'conversão de mês passado: nada antes da 1ª parcela');
+  assertEqual(Calc.calculateInstallmentsMonthlyTotal(data, '2026-08'), 100, 'conversão de mês passado: 1ª parcela fica no mês do lançamento original');
+  assertEqual(Calc.calculateInstallmentsMonthlyTotal(data, '2026-09'), 100, 'conversão de mês passado: 2ª parcela no mês atual');
+  assertEqual(Calc.calculateInstallmentsMonthlyTotal(data, '2026-10'), 100, 'conversão de mês passado: 3ª parcela no mês seguinte');
+  assertEqual(Calc.calculateInstallmentsMonthlyTotal(data, '2026-11'), 0, 'conversão de mês passado: exatamente 3 cobranças, não 4');
+  assertEqual(Calc.installmentLabelForMonth(convertida, '2026-09', mes), '2/3', 'conversão de mês passado: rótulo da parcela do mês atual');
+  assertEqual(Calc.installmentLabelForMonth(convertida, '2026-08', mes), '1/3', 'conversão de mês passado: rótulo da 1ª parcela');
+
+  // O valor cheio (R$ 300) não pode mais pesar em nenhum mês — é o ponto da
+  // conversão: só a parcela entra na conta.
+  assertEqual(Calc.calculateMonthlyExpenses(data, '2026-09'), 100, 'conversão: só a parcela pesa no mês, nunca o total da compra');
+  assertEqual(
+    Calc.calculateMonthPurchases(data, '2026-09').total,
+    100,
+    'conversão: extrato do mês também mostra só a parcela'
+  );
+}
+
+// ---------------------------------------------------------------------
 // Resultado
 // ---------------------------------------------------------------------
 console.log(`\n${passed} passaram, ${failed} falharam.`);

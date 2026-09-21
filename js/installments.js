@@ -253,7 +253,48 @@ const Installments = {
     document.getElementById('installment-observacao').value = item ? item.observacao || '' : '';
 
     this._populateCategoriaSelect(item ? item.categoria : null);
+    // Abre sempre em "Da parcela" — é o valor que já está gravado no item, e
+    // interpretar o campo preenchido como total da compra dividiria de novo
+    // um número que já era a parcela.
+    this.setValorModo('parcela');
     document.getElementById('installment-modal').classList.add('active');
+  },
+
+  /** 'parcela' (padrão) ou 'total' — em qual unidade #installment-valor está. */
+  valorModo: 'parcela',
+
+  setValorModo(modo) {
+    this.valorModo = modo;
+    const wrap = document.getElementById('installment-valor-modo');
+    if (wrap) wrap.querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.modo === modo));
+    const label = document.getElementById('installment-valor-label');
+    if (label) label.textContent = modo === 'total' ? 'Valor total da compra (R$)' : 'Valor da parcela (R$)';
+    this.updateValorHint();
+  },
+
+  /** Mostra como o valor digitado se traduz em parcelas — nos dois modos, pra conferir antes de salvar. */
+  updateValorHint() {
+    const hint = document.getElementById('installment-valor-hint');
+    if (!hint) return;
+    const valor = parseFloat(document.getElementById('installment-valor').value);
+    const total = parseInt(document.getElementById('installment-total').value, 10);
+    if (Number.isNaN(valor) || valor <= 0) { hint.textContent = ''; return; }
+    if (this.valorModo === 'total') {
+      if (Number.isNaN(total) || total < 1) {
+        hint.textContent = 'Preencha "Total de parcelas" para eu dividir o valor da compra.';
+        return;
+      }
+      hint.textContent = `${total}x de ${formatBRL(this._valorParcela(valor, total))}`;
+      return;
+    }
+    hint.textContent = (Number.isNaN(total) || total < 1)
+      ? ''
+      : `${total}x de ${formatBRL(valor)} · total da compra ${formatBRL(Math.round(valor * total * 100) / 100)}`;
+  },
+
+  /** Mesmo arredondamento aos centavos usado em Accounts._valorParcela. */
+  _valorParcela(valorTotal, vezes) {
+    return Math.round((valorTotal / vezes) * 100) / 100;
   },
 
   closeForm() {
@@ -280,6 +321,10 @@ const Installments = {
     if (!Number.isNaN(total) && !Number.isNaN(atual) && total > 0 && atual > 0) {
       document.getElementById('installment-restantes').value = Math.max(total - atual, 0);
     }
+    // Mudar o nº de parcelas muda quanto fica cada uma quando o valor
+    // informado é o total da compra — é isso que permite corrigir "em quantas
+    // vezes" sem recalcular a parcela na mão.
+    this.updateValorHint();
   },
 
   async submitForm(evt) {
@@ -299,17 +344,29 @@ const Installments = {
 
   async _doSubmitForm() {
     const nome = document.getElementById('installment-nome').value.trim();
-    const valorParcela = parseFloat(document.getElementById('installment-valor').value);
+    const valorInformado = parseFloat(document.getElementById('installment-valor').value);
     const totalRaw = document.getElementById('installment-total').value;
     const atualRaw = document.getElementById('installment-atual').value;
     const restantesRaw = document.getElementById('installment-restantes').value;
     const categoria = document.getElementById('installment-categoria').value;
     const observacao = document.getElementById('installment-observacao').value.trim() || null;
 
-    if (!nome || Number.isNaN(valorParcela) || valorParcela <= 0) {
-      alert('Preencha o nome e um valor de parcela válido.');
+    if (!nome || Number.isNaN(valorInformado) || valorInformado <= 0) {
+      alert('Preencha o nome e um valor válido.');
       return;
     }
+
+    // No modo "total da compra" o número digitado ainda não é a parcela —
+    // dividir aqui, antes de qualquer conta de limite/gravação, mantém o
+    // resto do fluxo trabalhando sempre com valorParcela.
+    const totalParcelas = totalRaw === '' ? null : parseInt(totalRaw, 10);
+    if (this.valorModo === 'total' && (totalParcelas == null || Number.isNaN(totalParcelas) || totalParcelas < 1)) {
+      alert('Para informar o valor total da compra, preencha também o total de parcelas.');
+      return;
+    }
+    const valorParcela = this.valorModo === 'total'
+      ? this._valorParcela(valorInformado, totalParcelas)
+      : valorInformado;
     const parcelasRestantes = restantesRaw === '' ? NaN : parseInt(restantesRaw, 10);
     if (restantesRaw === '' || Number.isNaN(parcelasRestantes) || parcelasRestantes < 0) {
       alert('Informe quantas parcelas restam (pode ser 0, se esta for a última).');
@@ -317,6 +374,23 @@ const Installments = {
     }
 
     let item = this.editingId ? appData.parcelamentos.find((p) => p.id === this.editingId) : null;
+
+    // Mesma checagem de duplicata de Accounts._submitAsInstallment (constraint
+    // parcelamentos_sem_duplicata, migration 0010) — aqui também vale barrar
+    // antes de gravar, senão o erro só apareceria como falha genérica de
+    // salvamento depois que o modal já fechou. Ignora o próprio item ao editar.
+    const parcelasRestantesNovo = parcelasRestantes;
+    const duplicado = appData.parcelamentos.some((p) => p !== item
+      && p.nome === nome
+      && (p.categoria || null) === (categoria || null)
+      && p.valorParcela === valorParcela
+      && p.parcelasRestantes === parcelasRestantesNovo);
+    if (duplicado) {
+      alert(`Já existe um parcelamento "${nome}" em ${categoria} com parcela de ${formatBRL(valorParcela)} e ${parcelasRestantesNovo} restante(s) — seria um registro duplicado.
+
+Se forem compras diferentes, mude o nome de uma delas.`);
+      return;
+    }
 
     // Parcelamentos impactam o mês corrente (e os seguintes) assim que cadastrados.
     const oldValor = item ? item.valorParcela : 0;
@@ -329,7 +403,7 @@ const Installments = {
 
     item.nome = nome;
     item.valorParcela = valorParcela;
-    item.totalParcelas = totalRaw === '' ? null : parseInt(totalRaw, 10);
+    item.totalParcelas = totalParcelas;
     item.parcelaAtual = atualRaw === '' ? null : parseInt(atualRaw, 10);
     item.parcelasRestantes = parcelasRestantes;
     item.categoria = categoria;

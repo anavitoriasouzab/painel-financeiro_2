@@ -6,9 +6,31 @@
  */
 
 const Backup = {
-  exportJSON() {
-    const json = Storage.exportJSON();
-    this._download(json, `financas-backup-${appData.meta.mesReferenciaAtual}.json`, 'application/json');
+  /**
+   * O backup precisa continuar self-contained. Desde que as imagens foram
+   * pro Supabase Storage (ver migration 0015), `comprovante`/`foto` guardam
+   * um PATH de um bucket privado — exportar o path deixaria o backup sem as
+   * imagens e inútil em outra conta, que não tem permissão de ler aqueles
+   * objetos. Então na exportação as imagens voltam a ser base64, que é o
+   * formato que _sanitizeImportedImages/Storage.migrateBase64Images já
+   * sabem receber de volta na importação.
+   */
+  async exportJSON() {
+    toast('Preparando backup...');
+    const dados = JSON.parse(Storage.exportJSON());
+    try {
+      await Promise.all([
+        ...(dados.despesasVariaveis || []).map(async (d) => {
+          if (d.comprovante) d.comprovante = await Storage.imageAsDataUrl(d.comprovante);
+        }),
+        (async () => {
+          if (dados.perfil && dados.perfil.foto) dados.perfil.foto = await Storage.imageAsDataUrl(dados.perfil.foto);
+        })(),
+      ]);
+    } catch (e) {
+      console.error('Falha ao embutir imagens no backup.', e);
+    }
+    this._download(JSON.stringify(dados, null, 2), `financas-backup-${appData.meta.mesReferenciaAtual}.json`, 'application/json');
     toast('Backup JSON exportado.');
   },
 
@@ -80,6 +102,10 @@ const Backup = {
       input.value = '';
       toast('Backup importado com sucesso.');
       renderAll();
+      // As imagens chegam em base64 (é o formato do arquivo de backup) —
+      // sobe pro bucket e troca pelos paths, igual ao que acontece com uma
+      // base antiga no primeiro carregamento.
+      Storage.migrateBase64Images(appData).then((n) => { if (n) renderAll(); });
     };
     reader.readAsText(file);
   },

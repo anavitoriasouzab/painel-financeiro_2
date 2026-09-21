@@ -32,6 +32,12 @@
   --text-secondary: #6B6480;
   --text-muted: #78708C;
 
+  /* Texto por cima de fundo cheio (botão roxo, toast): no claro é branco
+     puro mesmo — o contraste com o roxo é o que sustenta a leitura. No
+     escuro ele ganha um tom quebrado (ver [data-theme="dark"]), porque ali
+     o branco puro brilha demais ao lado de um fundo quase preto. */
+  --text-on-accent: #FFFFFF;
+
   --success: #187E56;
   --success-bg: #E4F7EF;
   --warning: #966319;
@@ -75,9 +81,17 @@
   --surface-soft: #1B1F33;
   --border: #262B42;
 
-  --text-primary: #E7E9F2;
+  /* Branco puro (e quase-branco) cansa a vista sobre fundo quase preto:
+     #E7E9F2 dava 14,7:1 de contraste, bem acima do necessário. Este tom
+     lavanda-acinzentado mantém 12:1 sobre --surface (WCAG AAA, muito acima
+     do AA de 4,5:1) e tira o "brilho" do texto. Não abaixar mais que isso
+     sem refazer a conta de contraste. */
+  --text-primary: #CFD4E3;
   --text-secondary: #9CA3B8;
   --text-muted: #6B7288;
+  /* 6,1:1 sobre --purple-600 e 12,9:1 sobre --purple-900 — AA garantido
+     nos dois fundos cheios onde ele é usado. */
+  --text-on-accent: #EFEDF9;
 
   --success: #34D399;
   --warning: #FBBF24;
@@ -127,6 +141,12 @@
   --text-primary: #201A33;
   --text-secondary: #6B6480;
   --text-muted: #78708C;
+
+  /* Texto por cima de fundo cheio (botão roxo, toast): no claro é branco
+     puro mesmo — o contraste com o roxo é o que sustenta a leitura. No
+     escuro ele ganha um tom quebrado (ver [data-theme="dark"]), porque ali
+     o branco puro brilha demais ao lado de um fundo quase preto. */
+  --text-on-accent: #FFFFFF;
 
   --success: #187E56;
   --success-bg: #E4F7EF;
@@ -241,7 +261,11 @@ body {
   color: var(--text-primary);
   font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
-  padding-bottom: calc(var(--nav-height) + 16px);
+  /* Reserva a barra inferior fixa MAIS a safe area do aparelho. Sem o
+     env() aqui, no app instalado (PWA em tela cheia, onde a safe area do
+     iPhone existe de verdade) a barra crescia por baixo e comia o final do
+     conteúdo — o último cartão/botão de cada tela ficava inalcançável. */
+  padding-bottom: calc(var(--nav-height) + 16px + env(safe-area-inset-bottom, 0px));
 }
 
 /* No escuro o fundo ganha mais presença — os mesmos brilhos roxos da tela
@@ -877,6 +901,65 @@ section.view.active { display: block; animation: view-fade-in 0.25s ease; }
 .raiox-legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 .raiox-legend-swatch { width: 8px; height: 8px; border-radius: 2px; background: var(--surface-soft); border: 1px solid var(--border); flex-shrink: 0; }
 
+/* "Deste mês x já comprometido à frente" — ver buildFutureCommitmentPanel
+   em dashboard.js. O medidor acima só enxerga o mês corrente, então os
+   dois números ficam pareados aqui com o mesmo peso visual: nenhum dos
+   dois sozinho é "o" comprometimento. Em tela estreita empilham, e a
+   divisória vertical vira horizontal pra não cortar texto. */
+.raiox-future {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 18px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.raiox-future-col { flex: 1 1 150px; min-width: 0; }
+.raiox-future-col + .raiox-future-col {
+  padding-left: 18px;
+  border-left: 1px solid var(--border);
+}
+.raiox-future-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 3px;
+}
+.raiox-future-value {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+.raiox-future-sub {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+  margin-top: 2px;
+}
+.raiox-future-warn {
+  flex: 1 1 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--warning);
+}
+.raiox-future-warn .material-symbols-outlined { font-size: 14px; }
+
+@media (max-width: 480px) {
+  .raiox-future-col { flex-basis: 100%; }
+  .raiox-future-col + .raiox-future-col {
+    padding-left: 0;
+    border-left: none;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+}
+
 /* Mensagem do Raio-X como insight com marcador (título em negrito +
    detalhe), no mesmo espírito dos alertas de Análises — cor do marcador
    segue o estado (verde/amarelo/vermelho), igual à legenda acima. */
@@ -932,14 +1015,41 @@ section.view.active { display: block; animation: view-fade-in 0.25s ease; }
 .bottom-nav {
   position: fixed;
   bottom: 0; left: 0; right: 0;
-  height: var(--nav-height);
+  /* A safe area SOMA na altura em vez de ser descontada dela. Com
+     `height: var(--nav-height)` + `padding-bottom: env(...)` e o
+     `box-sizing: border-box` global, o inset (≈34px num iPhone com notch)
+     era subtraído dos 68px: sobravam ~34px de área útil e os ícones+rótulos
+     saíam esmagados/cortados no app instalado. Daí a diferença que aparecia
+     entre o site no navegador (inset 0) e o app em tela cheia. */
+  min-height: var(--nav-height);
+  height: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px));
+  padding-bottom: env(safe-area-inset-bottom, 0px);
   background: var(--surface);
   border-top: 1px solid var(--border);
   display: flex;
   align-items: center;
   justify-content: space-around;
-  padding-bottom: env(safe-area-inset-bottom);
   z-index: 20;
+}
+
+/* Cada item divide a largura em partes iguais e o rótulo trunca em vez de
+   empurrar a barra: com 5 itens e "Planejamento" no meio, num aparelho de
+   320-360px o texto estourava a largura e desalinhava a barra inteira. */
+.bottom-nav .nav-item {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 6px 4px;
+}
+.bottom-nav .nav-item > span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bottom-nav .nav-item.add-btn { flex: 0 0 auto; }
+
+@media (max-width: 380px) {
+  .bottom-nav .nav-item { font-size: 9.5px; padding: 6px 2px; }
 }
 
 .nav-item {
@@ -962,7 +1072,7 @@ section.view.active { display: block; animation: view-fade-in 0.25s ease; }
 
 .nav-item.add-btn {
   background: var(--purple-600);
-  color: white;
+  color: var(--text-on-accent);
   width: 48px;
   height: 48px;
   border-radius: 16px;
@@ -1080,6 +1190,10 @@ section.view.active { display: block; animation: view-fade-in 0.25s ease; }
 
   .bottom-nav { display: none; }
 
+  /* Só existe enquanto a .side-nav não existe — o que está na sidebar do
+     desktop (hoje: sair da conta) não precisa ser repetido dentro das telas. */
+  .mobile-only { display: none !important; }
+
   /* Sem margin:auto aqui — o conteúdo fica ancorado à esquerda (logo após
      a sidebar) em vez de centralizado, que em telas largas deixava um vão
      vazio grande dos dois lados. */
@@ -1136,7 +1250,7 @@ section.view.active { display: block; animation: view-fade-in 0.25s ease; }
 
 .primary-btn {
   background: var(--purple-600);
-  color: white;
+  color: var(--text-on-accent);
   border: none;
   border-radius: 12px;
   padding: 12px 16px;
@@ -1529,7 +1643,76 @@ section.view.active { display: block; animation: view-fade-in 0.25s ease; }
   font-family: inherit;
 }
 .field input[type="date"] { color-scheme: light dark; }
-.field input[type="file"] { width: 100%; font-size: 12.5px; }
+
+/* Seletor de arquivo: o <input type="file"> nativo não aceita as variáveis de
+   cor/raio do :root (o botão interno é desenhado pelo sistema), então em tema
+   escuro ele saía branco e destoando dos outros campos. Aqui o input fica
+   escondido e quem aparece é o <label for> estilizado como .mini-btn, com o
+   nome do arquivo ao lado — mesmo padrão já usado na foto de perfil e no
+   importar backup. O input continua no DOM (e focável por teclado via
+   .file-picker-input:focus-visible abaixo), só não é ele quem é pintado. */
+.file-picker { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.file-picker-input {
+  position: absolute;
+  width: 1px; height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.file-picker-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--purple-text);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.file-picker-btn:hover { background: var(--purple-soft); border-color: var(--purple-soft); }
+.file-picker-btn .material-symbols-outlined { font-size: 17px; }
+.file-picker-input:focus-visible + .file-picker-btn {
+  outline: 2px solid var(--purple-600);
+  outline-offset: 2px;
+}
+.file-picker-name {
+  font-size: 12px;
+  color: var(--text-muted);
+  min-width: 0;
+  flex: 1 1 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Checkbox com rótulo na mesma linha (ex.: "Foi uma compra parcelada") — o
+   .field padrão empilha label em cima do controle, que aqui deixaria o texto
+   solto acima de uma caixinha minúscula. */
+.field .check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.field .check-row input[type="checkbox"] {
+  width: 18px; height: 18px;
+  accent-color: var(--purple-600);
+  margin: 0;
+  cursor: pointer;
+}
+
+/* Texto de apoio abaixo de um campo (ex.: a previsão "2x de R$ 50,00"). */
+.field-hint { font-size: 12px; color: var(--purple-text); margin-top: 6px; line-height: 1.4; }
+/* Quando o hint não está DENTRO de um .field (é irmão dele, comentando a
+   linha inteira acima — caso do valor do parcelamento), ele não herda o
+   margin-bottom do .field e encostava no rótulo do campo seguinte. */
+form > .field-hint { margin-top: -4px; margin-bottom: 14px; }
+form > .field-hint:empty { margin: 0; }
 
 .segmented { display: flex; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
 .segmented button {
@@ -2256,7 +2439,7 @@ section.view.active { display: block; animation: view-fade-in 0.25s ease; }
   border-radius: 999px;
   padding: 11px 22px;
   background: linear-gradient(135deg, var(--purple-600) 0%, var(--purple-500) 100%);
-  color: #fff;
+  color: var(--text-on-accent);
   font-family: var(--font-display);
   font-weight: 700;
   font-size: 13.5px;
@@ -2288,7 +2471,7 @@ section.view.active { display: block; animation: view-fade-in 0.25s ease; }
   border-radius: 14px;
   padding: 8px 12px;
   background: linear-gradient(135deg, var(--purple-600) 0%, var(--purple-500) 100%);
-  color: #fff;
+  color: var(--text-on-accent);
   cursor: pointer;
   text-align: left;
   box-shadow: 0 6px 16px -6px rgba(76, 46, 158, 0.45);
@@ -2434,11 +2617,13 @@ section.view.active { display: block; animation: view-fade-in 0.25s ease; }
 
 .toast {
   position: fixed;
-  bottom: calc(var(--nav-height) + 16px);
+  /* Mesma conta do padding-bottom do body — sem o env(), no app instalado o
+     toast nascia atrás da barra inferior. */
+  bottom: calc(var(--nav-height) + 16px + env(safe-area-inset-bottom, 0px));
   left: 50%;
   transform: translate(-50%, 12px);
   background: var(--purple-900);
-  color: white;
+  color: var(--text-on-accent);
   padding: 10px 18px;
   border-radius: 999px;
   font-size: 13px;
@@ -2545,6 +2730,15 @@ section.view.active { display: block; animation: view-fade-in 0.25s ease; }
 .report-table th, .report-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #D5C8EA; }
 .report-table th { color: #6B6480; font-weight: 600; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.02em; }
 .report-table td.num, .report-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+/* Linha de total (tfoot) — usada pelo extrato "Compras do mês" (seção 05):
+   fundo e borda mais fortes pra ela não se confundir com uma cobrança a mais
+   da lista logo acima. */
+.report-table tfoot td {
+  border-top: 2px solid #A98FDD;
+  border-bottom: none;
+  background: #F1EBFB;
+  font-size: 12.5px;
+}
 
 .report-empty { font-size: 12.5px; color: #78708C; padding: 6px 0; }
 

@@ -204,7 +204,28 @@ const Dashboard = {
     const state = loadNotifState(mes);
     if (!state.dispensadas.includes(id)) state.dispensadas.push(id);
     saveNotifState(state);
+    this._resolveInconsistencyIfAny(id);
     this._renderReminders(appData);
+  },
+
+  /**
+   * Lembrete de inconsistência dispensado tem que ser marcado como resolvido
+   * NOS DADOS, não só no estado local de notificações: esse estado vive em
+   * localStorage e é escopado ao mês corrente (ver loadNotifState), então uma
+   * inconsistência dispensada voltava como "urgente" na virada do mês, em
+   * outro navegador ou depois de limpar o site — para sempre, porque nada no
+   * app escrevia a coluna `resolvida` que Calc.calculateReminders já filtra.
+   * Os outros lembretes (contas pendentes, metas, parcelas terminando) são
+   * recalculados dos dados reais e somem sozinhos, então continuam só no
+   * estado local.
+   */
+  _resolveInconsistencyIfAny(reminderId) {
+    if (!String(reminderId).startsWith('inc-')) return;
+    const incId = String(reminderId).slice('inc-'.length);
+    const item = (appData.inconsistenciasDetectadas || []).find((i) => String(i.id) === incId);
+    if (!item || item.resolvida) return;
+    item.resolvida = true;
+    Storage.save(appData);
   },
 
   _renderHeader(mes) {
@@ -406,6 +427,9 @@ const Dashboard = {
       `;
     }
 
+    const futureEl = document.getElementById('raiox-future');
+    if (futureEl) futureEl.innerHTML = buildFutureCommitmentPanel(data, percentComprometido);
+
     const msgEl = document.getElementById('raiox-message');
     if (msgEl) {
       const { title, detail } = buildRaioXMessage(percentComprometido, renda, gastos, limite, nivel);
@@ -542,6 +566,58 @@ const Dashboard = {
   },
 
 };
+
+/**
+ * Par "deste mês x à frente" dentro do card de Renda comprometida. O
+ * medidor sozinho só enxerga o mês corrente: uma compra em 6x entra nele
+ * como uma parcela só, como se não prendesse mais nada. Esta faixa põe ao
+ * lado o que já está contratado para DEPOIS deste mês
+ * (Calc.calculateFutureCommitments) — os dois números lado a lado, sem
+ * misturar um no outro, o que inventaria um comprometimento que nenhum mês
+ * tem de fato.
+ *
+ * Nada aqui é projeção: são as parcelas restantes já cadastradas. O que
+ * não dá pra saber (parcelamento sem nº de parcelas restantes) fica fora
+ * do total e aparece sinalizado, em vez de virar um chute somado.
+ */
+function buildFutureCommitmentPanel(data, percentComprometido) {
+  const futuro = Calc.calculateFutureCommitments(data);
+  const mes = data.meta.mesReferenciaAtual;
+
+  const subFuturo = [];
+  if (futuro.total > 0) {
+    subFuturo.push(futuro.mesesDeRenda == null
+      ? 'renda do mês não cadastrada'
+      : `${formatMesesDeRenda(futuro.mesesDeRenda)} de renda`);
+    if (futuro.ultimoMes) subFuturo.push(`última parcela em ${formatMonthKey(futuro.ultimoMes)}`);
+  } else {
+    subFuturo.push('nenhuma parcela contratada além deste mês');
+  }
+
+  const aviso = futuro.semPrazo > 0
+    ? `<div class="raiox-future-warn"><span class="material-symbols-outlined" aria-hidden="true">help</span>${futuro.semPrazo} parcelamento${futuro.semPrazo > 1 ? 's' : ''} sem nº de parcelas restantes — fora deste total.</div>`
+    : '';
+
+  return `
+    <div class="raiox-future-col">
+      <div class="raiox-future-label">Deste mês</div>
+      <div class="raiox-future-value">${percentComprometido == null ? 'não informado' : formatPercent(percentComprometido)}</div>
+      <div class="raiox-future-sub">da renda de ${escapeHtml(formatMonthKey(mes))}</div>
+    </div>
+    <div class="raiox-future-col">
+      <div class="raiox-future-label">Já comprometido à frente</div>
+      <div class="raiox-future-value">${formatBRL(futuro.total)}</div>
+      <div class="raiox-future-sub">${escapeHtml(subFuturo.join(' · '))}</div>
+    </div>
+    ${aviso}
+  `;
+}
+
+/** "0,5 meses" / "1,0 mês" / "2,4 meses" — singular só quando é exatamente 1. */
+function formatMesesDeRenda(meses) {
+  const txt = meses.toFixed(1).replace('.', ',');
+  return `${txt} ${txt === '1,0' ? 'mês' : 'meses'}`;
+}
 
 /**
  * Mensagem do Raio-X, separada em título (curto, em negrito) + detalhe —

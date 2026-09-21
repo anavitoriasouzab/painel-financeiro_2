@@ -161,7 +161,9 @@ const Profile = {
     const placeholder = document.getElementById(placeholderId);
     if (!img || !placeholder) return;
     if (data.perfil.foto) {
-      img.src = data.perfil.foto;
+      // A foto fica no bucket privado (ver Storage.imageSrc): o que está
+      // salvo é um path, que precisa virar URL assinada antes de exibir.
+      Storage.imageSrc(data.perfil.foto).then((src) => { if (src) img.src = src; });
       img.style.display = 'block';
       placeholder.style.display = 'none';
     } else {
@@ -179,7 +181,7 @@ const Profile = {
     const placeholder = document.getElementById('profile-photo-placeholder');
     if (preview && placeholder) {
       if (data.perfil.foto) {
-        preview.src = data.perfil.foto;
+        Storage.imageSrc(data.perfil.foto).then((src) => { if (src) preview.src = src; });
         preview.style.display = 'block';
         placeholder.style.display = 'none';
       } else {
@@ -224,26 +226,38 @@ const Profile = {
     if (anchor) anchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
   },
 
-  handlePhotoChange(input) {
+  async handlePhotoChange(input) {
     const file = input.files && input.files[0];
     if (!file) return;
-    if (file.size > 1.5 * 1024 * 1024) {
-      alert('Imagem muito grande (limite de ~1,5MB). Escolha uma foto menor.');
+    // 5MB (era ~1,5MB) — a foto não vai mais em base64 dentro da linha de
+    // `perfil`, e sim pro bucket, cujo teto é esse (ver migration 0015).
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Imagem muito grande (limite de 5MB). Escolha uma foto menor.');
       input.value = '';
       return;
     }
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      appData.perfil.foto = e.target.result;
-      Storage.save(appData);
-      this.render(appData);
-      toast('Foto atualizada.');
-    };
-    reader.readAsDataURL(file);
+    const anterior = appData.perfil.foto;
+    try {
+      appData.perfil.foto = await Storage.uploadImage(file, 'foto');
+    } catch (e) {
+      console.error('Falha ao subir a foto de perfil.', e);
+      toast('⚠️ Não consegui salvar a foto. Tente de novo.');
+      input.value = '';
+      return;
+    }
+    // Só depois da nova estar no ar a antiga sai do bucket — se o upload
+    // falhasse antes, a pessoa teria ficado sem nenhuma das duas.
+    if (anterior) await Storage.removeImage(anterior);
+    Storage.save(appData);
+    this.render(appData);
+    input.value = '';
+    toast('Foto atualizada.');
   },
 
-  removePhoto() {
+  async removePhoto() {
+    const anterior = appData.perfil.foto;
     appData.perfil.foto = null;
+    if (anterior) await Storage.removeImage(anterior);
     Storage.save(appData);
     this.render(appData);
   },

@@ -36,6 +36,7 @@ const Report = {
       ${this._buildFluxo()}
       ${this._buildCategorias()}
       ${this._buildTopExpenses(data, mes)}
+      ${this._buildCompras(data, mes)}
       ${this._buildComprometimento(data, mes)}
       ${this._buildCompromissos(data)}
       ${this._buildMetas(data)}
@@ -120,6 +121,51 @@ const Report = {
     `;
   },
 
+  /**
+   * Extrato completo do mês: uma linha por cobrança, com o número da parcela
+   * quando a compra é parcelada, e o total fechando a tabela. Diferente de
+   * "Maiores despesas" (seção 04), aqui NADA é cortado — é a lista que
+   * justifica o número de gastos do resumo, então a soma das linhas tem que
+   * bater com ele (ver Calc.calculateMonthPurchases).
+   */
+  _buildCompras(data, mes) {
+    const { itens, total } = Calc.calculateMonthPurchases(data, mes);
+    if (!itens.length) {
+      return `
+        <div class="report-section">
+          <div class="report-section-title">05 · Compras do mês</div>
+          <p class="report-empty">Nenhuma cobrança lançada em ${escapeHtml(formatMonthKey(mes))}.</p>
+        </div>
+      `;
+    }
+    const rows = itens.map((i) => `
+      <tr>
+        <td>${escapeHtml(i.nome)}</td>
+        <td>${escapeHtml(i.categoria || 'Sem categoria')}</td>
+        <td>${escapeHtml(i.tipo)}</td>
+        <td>${escapeHtml(i.parcela || '—')}</td>
+        <td class="num">${formatBRL(i.valor)}</td>
+      </tr>
+    `).join('');
+    return `
+      <div class="report-section">
+        <div class="report-section-title">05 · Compras do mês</div>
+        <table class="report-table">
+          <thead>
+            <tr><th>Compra</th><th>Categoria</th><th>Tipo</th><th>Parcela</th><th class="num">Valor</th></tr>
+          </thead>
+          <tbody>${rows}</tbody>
+          <tfoot>
+            <tr>
+              <td colspan="4"><strong>Total de ${itens.length} cobrança${itens.length > 1 ? 's' : ''} em ${escapeHtml(formatMonthKey(mes))}</strong></td>
+              <td class="num"><strong>${formatBRL(total)}</strong></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    `;
+  },
+
   _buildComprometimento(data, mes) {
     const renda = Calc.calculateMonthlyIncome(data, mes);
     const gastos = Calc.calculateMonthlyExpenses(data, mes);
@@ -129,7 +175,7 @@ const Report = {
     const msg = typeof buildRaioXMessage === 'function' ? buildRaioXMessage(pct, renda, gastos, limite, nivel) : { title: '', detail: '' };
     return `
       <div class="report-section">
-        <div class="report-section-title">05 · Comprometimento da renda</div>
+        <div class="report-section-title">06 · Comprometimento da renda</div>
         <p class="report-empty" style="color:#201A33;"><strong>${escapeHtml(msg.title)}</strong> ${escapeHtml(msg.detail)}</p>
       </div>
     `;
@@ -141,7 +187,7 @@ const Report = {
     if (!upcoming.length) {
       return `
         <div class="report-section">
-          <div class="report-section-title">06 · Compromissos e parcelamentos</div>
+          <div class="report-section-title">07 · Compromissos e parcelamentos</div>
           <p class="report-empty">Nenhum parcelamento com término previsto nos próximos meses.</p>
         </div>
       `;
@@ -166,7 +212,7 @@ const Report = {
     }).join('');
     return `
       <div class="report-section">
-        <div class="report-section-title">06 · Compromissos e parcelamentos</div>
+        <div class="report-section-title">07 · Compromissos e parcelamentos</div>
         ${margem > 0 ? `<p class="report-empty" style="color:#187E56;font-weight:600;">+ ${escapeHtml(formatBRL(margem))} de margem liberada a partir do próximo mês.</p>` : ''}
         ${gruposHtml}
       </div>
@@ -182,7 +228,7 @@ const Report = {
     }).join('');
     return `
       <div class="report-section">
-        <div class="report-section-title">07 · Metas</div>
+        <div class="report-section-title">08 · Metas</div>
         <table class="report-table">
           <thead><tr><th>Meta</th><th class="num">Progresso</th><th class="num">Falta</th></tr></thead>
           <tbody>${rows}</tbody>
@@ -228,7 +274,7 @@ const Report = {
 
     return `
       <div class="report-section">
-        <div class="report-section-title">08 · Insights do mês</div>
+        <div class="report-section-title">09 · Insights do mês</div>
         <div class="report-insights-grid">
           ${quadrante('melhorou', 'Melhorou', 'trending_up', '#187E56')}
           ${quadrante('piorou', 'Piorou', 'trending_down', '#C0392B')}

@@ -54,9 +54,48 @@ const Calc = {
     );
   },
 
-  /** Soma do valor das parcelas ativas no cartão neste ciclo (a "fatura consolidada"). */
-  calculateInstallmentsMonthlyTotal(data) {
-    return sum(data.parcelamentos.map((p) => p.valorParcela));
+  /**
+   * Janela de meses em que um parcelamento é de fato cobrado, derivada só
+   * dos campos já cadastrados — nada é chutado:
+   *   - `ultimoMes`   = mês atual + `parcelasRestantes` (nº de cobranças que
+   *     ainda ocorrem DEPOIS deste mês; 0 = a deste mês é a última)
+   *   - `primeiroMes` = mês atual - (`parcelaAtual` - 1)
+   * Quando o campo correspondente não foi preenchido, aquele limite fica
+   * `null` e é tratado como "não dá pra saber" (o parcelamento continua
+   * contando daquele lado), em vez de inventar uma data de início/fim.
+   */
+  calculateInstallmentActiveRange(p, mesReferenciaAtual) {
+    return {
+      primeiroMes: p.parcelaAtual == null ? null : addMonths(mesReferenciaAtual, -(p.parcelaAtual - 1)),
+      ultimoMes: p.parcelasRestantes == null ? null : addMonths(mesReferenciaAtual, p.parcelasRestantes),
+    };
+  },
+
+  /**
+   * Um parcelamento só pode entrar na conta de um mês em que ele realmente
+   * é cobrado. Sem essa checagem, um parcelamento encerrado em setembro
+   * continuava somado em outubro, e um começado em agosto já aparecia em
+   * julho — era por aí que o total de uma categoria num mês passado
+   * deixava de bater com a soma das linhas mostradas naquele mês.
+   */
+  isParcelamentoAtivoNoMes(p, mesReferencia, mesReferenciaAtual) {
+    if (!mesReferencia || !mesReferenciaAtual) return true;
+    const { primeiroMes, ultimoMes } = this.calculateInstallmentActiveRange(p, mesReferenciaAtual);
+    if (ultimoMes && mesReferencia > ultimoMes) return false;
+    if (primeiroMes && mesReferencia < primeiroMes) return false;
+    return true;
+  },
+
+  /** Parcelamentos cobrados no mês informado (sem mês informado, o de referência atual). */
+  activeInstallmentsForMonth(data, mesReferencia) {
+    const mesAtual = data.meta.mesReferenciaAtual;
+    const mes = mesReferencia || mesAtual;
+    return data.parcelamentos.filter((p) => this.isParcelamentoAtivoNoMes(p, mes, mesAtual));
+  },
+
+  /** Soma das parcelas cobradas no mês informado (a "fatura consolidada" daquele mês). */
+  calculateInstallmentsMonthlyTotal(data, mesReferencia) {
+    return sum(this.activeInstallmentsForMonth(data, mesReferencia).map((p) => p.valorParcela));
   },
 
   /** Total de despesas do mês: fixas + variáveis do mês + parcelas ativas. */
@@ -64,7 +103,7 @@ const Calc = {
     return (
       this.calculateFixedExpenses(data, mesReferencia) +
       this.calculateVariableExpenses(data, mesReferencia) +
-      this.calculateInstallmentsMonthlyTotal(data)
+      this.calculateInstallmentsMonthlyTotal(data, mesReferencia)
     );
   },
 
@@ -173,6 +212,38 @@ const Calc = {
 
 
   /**
+   * Compromissos JÁ CONTRATADOS que ainda serão cobrados DEPOIS do mês
+   * atual — a parte do comprometimento que o % do mês não mostra: uma
+   * compra em 6x aparece no mês corrente como uma parcela só, mas prende
+   * renda por mais 5 meses.
+   *
+   * Só entra o que tem prazo cadastrado: `valorParcela × parcelasRestantes`
+   * de cada parcelamento. Despesas recorrentes NÃO entram — elas não têm
+   * mês de término, então qualquer total delas seria um prazo inventado.
+   * Parcelamentos sem `parcelasRestantes` preenchido ficam fora do total e
+   * são contados em `semPrazo`, pra tela poder sinalizar o dado faltante em
+   * vez de somar um chute.
+   *
+   * `mesesDeRenda` = total ÷ renda do mês (null sem renda cadastrada):
+   * quantos meses inteiros da renda atual já estão comprometidos à frente.
+   */
+  calculateFutureCommitments(data) {
+    const mesAtual = data.meta.mesReferenciaAtual;
+    const comPrazo = data.parcelamentos.filter((p) => p.parcelasRestantes != null && p.parcelasRestantes >= 1);
+    const semPrazo = data.parcelamentos.filter((p) => p.parcelasRestantes == null).length;
+    const total = sum(comPrazo.map((p) => p.valorParcela * p.parcelasRestantes));
+    const renda = this.calculateMonthlyIncome(data, mesAtual);
+    const maiorPrazo = comPrazo.reduce((max, p) => Math.max(max, p.parcelasRestantes), 0);
+    return {
+      total,
+      itens: comPrazo.length,
+      semPrazo,
+      mesesDeRenda: renda > 0 ? total / renda : null,
+      ultimoMes: maiorPrazo > 0 ? addMonths(mesAtual, maiorPrazo) : null,
+    };
+  },
+
+  /**
    * Previsão do próximo mês: renda mantida, despesas fixas mantidas,
    * apenas os parcelamentos que ainda estarão ativos (parcelasRestantes >= 1),
    * e uma estimativa de gastos variáveis baseada no(s) mês(es) já registrados
@@ -235,14 +306,7 @@ const Calc = {
    * meses (no mês corrente, mesesAFrente=0, e o resultado é idêntico).
    */
   calculateActiveInstallmentsTotal(data, mesesAFrente) {
-    return sum(
-      data.parcelamentos
-        .filter((p) => {
-          const info = this.calculateInstallmentEndInfo(p, data.meta.mesReferenciaAtual);
-          return info.monthsUntilEnd == null || info.monthsUntilEnd >= mesesAFrente;
-        })
-        .map((p) => p.valorParcela)
-    );
+    return this.calculateInstallmentsMonthlyTotal(data, addMonths(data.meta.mesReferenciaAtual, mesesAFrente));
   },
 
   /**
@@ -646,8 +710,64 @@ const Calc = {
     data.despesasVariaveis
       .filter((d) => d.mesReferencia === mesReferencia)
       .forEach((d) => itens.push({ nome: d.nome, valor: d.valor, categoria: d.categoria, mes: d.mesReferencia }));
-    data.parcelamentos.forEach((p) => itens.push({ nome: p.nome, valor: p.valorParcela, categoria: p.categoria, mes: mesReferencia }));
+    this.activeInstallmentsForMonth(data, mesReferencia)
+      .forEach((p) => itens.push({ nome: p.nome, valor: p.valorParcela, categoria: p.categoria, mes: mesReferencia }));
     return itens.sort((a, b) => b.valor - a.valor).slice(0, limit);
+  },
+
+  /**
+   * Qual parcela de `p` é cobrada em `mesReferencia` — `parcelaAtual` diz em
+   * que parcela o parcelamento está no MÊS DE REFERÊNCIA ATUAL, então basta
+   * deslocar pela distância entre os dois meses. `null` quando o número da
+   * parcela não é conhecido (parcelamento cadastrado sem `parcelaAtual`),
+   * em vez de chutar "1".
+   */
+  installmentNumberForMonth(p, mesReferencia, mesReferenciaAtual) {
+    if (p.parcelaAtual == null || !mesReferencia || !mesReferenciaAtual) return null;
+    return p.parcelaAtual + monthsBetween(mesReferenciaAtual, mesReferencia);
+  },
+
+  /** Rótulo "3/10" da parcela cobrada no mês, ou só "3" quando o total de parcelas não foi informado. */
+  installmentLabelForMonth(p, mesReferencia, mesReferenciaAtual) {
+    const numero = this.installmentNumberForMonth(p, mesReferencia, mesReferenciaAtual);
+    if (numero == null) return null;
+    return p.totalParcelas != null ? `${numero}/${p.totalParcelas}` : String(numero);
+  },
+
+  /**
+   * TODAS as cobranças de um mês, uma linha por lançamento — é a lista que
+   * "abre" o número de gastos do mês (ver Relatório > Compras do mês). Não é
+   * um ranking (diferente de calculateTopExpenses, que corta no top N): aqui
+   * nada fica de fora, justamente pra que a soma das linhas SEMPRE bata com
+   * `total` (e com Calc.calculateMonthlyExpenses do mesmo mês).
+   *
+   * Cada item traz `parcela` ("3/10") apenas quando é de fato uma compra
+   * parcelada; recorrentes e despesas únicas vêm com `parcela: null`.
+   */
+  calculateMonthPurchases(data, mesReferencia) {
+    const mesAtual = data.meta.mesReferenciaAtual;
+    const itens = [];
+    data.despesasRecorrentes
+      .filter((d) => this.isDespesaRecorrenteAtiva(d, mesReferencia))
+      .forEach((d) => itens.push({
+        nome: d.nome, categoria: d.categoria, tipo: 'Recorrente', parcela: null, valor: d.valor, status: d.status || null,
+      }));
+    data.despesasVariaveis
+      .filter((d) => d.mesReferencia === mesReferencia)
+      .forEach((d) => itens.push({
+        nome: d.nome, categoria: d.categoria, tipo: 'Única', parcela: null, valor: d.valor, status: d.status || null,
+      }));
+    this.activeInstallmentsForMonth(data, mesReferencia)
+      .forEach((p) => itens.push({
+        nome: p.nome,
+        categoria: p.categoria,
+        tipo: 'Parcelada',
+        parcela: this.installmentLabelForMonth(p, mesReferencia, mesAtual),
+        valor: p.valorParcela,
+        status: null,
+      }));
+    itens.sort((a, b) => b.valor - a.valor);
+    return { itens, total: sum(itens.map((i) => i.valor)) };
   },
 
   /**
@@ -667,7 +787,7 @@ const Calc = {
     data.despesasVariaveis
       .filter((d) => d.mesReferencia === mesReferencia)
       .forEach((d) => add(d.categoria, d.valor));
-    data.parcelamentos.forEach((p) => add(p.categoria, p.valorParcela));
+    this.activeInstallmentsForMonth(data, mesReferencia).forEach((p) => add(p.categoria, p.valorParcela));
     return totals;
   },
 
@@ -801,6 +921,18 @@ function addMonths(mesRefKey, n) {
   const novoAno = ano + Math.floor(totalMeses / 12);
   const novoMes = (((totalMeses % 12) + 12) % 12) + 1;
   return `${novoAno}-${String(novoMes).padStart(2, '0')}`;
+}
+
+/**
+ * Quantos meses separam duas chaves "AAAA-MM" (`para` - `de`). Negativo
+ * quando `para` é anterior a `de`. Contraparte de addMonths(): é o que
+ * permite, por exemplo, descobrir QUAL parcela de um parcelamento cai num
+ * mês qualquer, sabendo só em que parcela ele está no mês de referência.
+ */
+function monthsBetween(de, para) {
+  const [anoDe, mesDe] = de.split('-').map(Number);
+  const [anoPara, mesPara] = para.split('-').map(Number);
+  return (anoPara - anoDe) * 12 + (mesPara - mesDe);
 }
 
 /** Formata "AAAA-MM" como "Set/2026" — formato padrão do app pra qualquer texto que mostre um mês por extenso. */

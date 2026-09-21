@@ -238,6 +238,7 @@
               </div>
               <div id="raiox-gauge"></div>
               <div class="raiox-legend" id="raiox-legend"></div>
+              <div class="raiox-future" id="raiox-future"></div>
               <div class="raiox-message" id="raiox-message"></div>
             </div>
             <div class="card span-4">
@@ -660,6 +661,15 @@
             <button class="mini-btn danger" style="width:100%;justify-content:center;"
               onclick="Backup.deleteAllData()">Excluir todos os dados</button>
           </div>
+
+          <!-- Sair da conta no mobile: o único botão de logout do app vive no
+               rodapé da .side-nav, que é display:none abaixo de 860px — ou
+               seja, no celular não havia NENHUMA forma de sair da conta. Este
+               esconde-se no desktop (ver .mobile-only) pra não voltar a ser
+               o card "Conta" redundante que já foi removido daqui. -->
+          <div class="card mobile-only">
+            <button class="secondary-btn" id="profile-logout-btn" style="width:100%;">Sair da conta</button>
+          </div>
         </section>
 
       </main>
@@ -699,7 +709,18 @@
         <path
           d="m627-287 45-45-159-160v-201h-60v225l174 181ZM480-80q-82 0-155-31.5t-127.5-86Q143-252 111.5-325T80-480q0-82 31.5-155t86-127.5Q252-817 325-848.5T480-880q82 0 155 31.5t127.5 86Q817-708 848.5-635T880-480q0 82-31.5 155t-86 127.5Q708-143 635-111.5T480-80Zm0-400Zm0 340q140 0 240-100t100-240q0-140-100-240T480-820q-140 0-240 100T140-480q0 140 100 240t240 100Z" />
       </svg>
-      <span>Planejamento</span>
+      <!-- "Planos", não "Planejamento": com 6 abas a palavra inteira não cabe
+           em nenhum celular real (em 320px sobram ~46px pra um rótulo que
+           precisa de ~66px) e era truncada com reticências. A .side-nav do
+           desktop, que tem espaço, continua dizendo "Planejamento". -->
+      <span>Planos</span>
+    </button>
+    <button class="nav-item" data-nav-target="perfil">
+      <svg viewBox="0 -960 960 960" width="22" height="22" fill="currentColor">
+            <path
+              d="M372-523q-42-42-42-108t42-108q42-42 108-42t108 42q42 42 42 108t-42 108q-42 42-108 42t-108-42ZM160-160v-94q0-38 19-65t49-41q67-30 128.5-45T480-420q62 0 123 15.5T731-360q31 14 50 41t19 65v94H160Zm60-60h520v-34q0-16-9.5-30.5T707-306q-64-31-117-42.5T480-360q-57 0-111 11.5T252-306q-14 7-23 21.5t-9 30.5v34Zm324.5-346.5Q570-592 570-631t-25.5-64.5Q519-721 480-721t-64.5 25.5Q390-670 390-631t25.5 64.5Q441-541 480-541t64.5-25.5ZM480-631Zm0 411Z" />
+          </svg>
+      <span>Perfil</span>
     </button>
   </nav>
 
@@ -745,8 +766,9 @@
 
         <div class="field-row">
           <div class="field">
-            <label for="expense-valor">Valor (R$)</label>
-            <input id="expense-valor" type="number" step="0.01" min="0" placeholder="0.00" required />
+            <label for="expense-valor" id="expense-valor-label">Valor (R$)</label>
+            <input id="expense-valor" type="number" step="0.01" min="0" placeholder="0.00" required
+              oninput="Accounts.updateParcelaHint()" />
           </div>
           <div class="field">
             <label for="expense-categoria">Categoria</label>
@@ -789,17 +811,49 @@
           <select id="expense-cartao"></select>
         </div>
 
+        <!-- Compra parcelada no cartão: o valor digitado acima passa a ser o
+             TOTAL da compra e o app divide pelo número de vezes, cadastrando
+             a compra em Parcelamentos (ver Accounts._submitAsInstallment) —
+             assim só a parcela entra no gasto de cada mês. Só aparece com
+             "Cartão de crédito" selecionado numa despesa única nova. -->
+        <div class="field" id="field-parcelado" style="display:none;">
+          <label class="check-row" for="expense-parcelado">
+            <input id="expense-parcelado" type="checkbox" onchange="Accounts.handleParceladoChange()" />
+            <span>Foi uma compra parcelada</span>
+          </label>
+        </div>
+
+        <div class="field" id="field-parcelas" style="display:none;">
+          <label for="expense-parcelas">Parcelado em quantas vezes?</label>
+          <input id="expense-parcelas" type="number" min="2" max="72" step="1" placeholder="Ex.: 2"
+            oninput="Accounts.updateParcelaHint()" />
+          <div class="field-hint" id="expense-parcela-hint"></div>
+        </div>
+
         <div class="field">
           <label for="expense-observacao">Observação (opcional)</label>
           <input id="expense-observacao" type="text" placeholder="Alguma nota sobre essa despesa" />
         </div>
 
+        <!-- O <input type="file"> nativo fica escondido e quem aparece é o
+             <label> estilizado (mesmo padrão da foto de perfil e do importar
+             backup) — o botão nativo não aceita as variáveis de cor/raio do
+             :root, então em tema escuro ele saía branco e fora do padrão dos
+             outros campos. O nome do arquivo escolhido vai em #...-filename. -->
         <div class="field">
           <label>Comprovante (opcional)</label>
-          <input id="expense-comprovante-input" type="file" accept="image/*"
-            onchange="Accounts.handleComprovanteChange(this)" />
+          <div class="file-picker">
+            <input id="expense-comprovante-input" class="file-picker-input" type="file" accept="image/*"
+              onchange="Accounts.handleComprovanteChange(this)" />
+            <label class="file-picker-btn" for="expense-comprovante-input">
+              <span class="material-symbols-outlined" aria-hidden="true">attach_file</span>
+              <span>Escolher imagem</span>
+            </label>
+            <span class="file-picker-name" id="expense-comprovante-filename">Nenhum arquivo escolhido</span>
+          </div>
           <img id="expense-comprovante-preview" class="receipt-preview" style="display:none" alt="Comprovante" />
-          <button type="button" class="mini-btn" onclick="Accounts.removeComprovante()">Remover comprovante</button>
+          <button type="button" class="mini-btn" id="expense-comprovante-remove-btn" style="display:none;"
+            onclick="Accounts.removeComprovante()">Remover comprovante</button>
         </div>
 
         <div class="modal-actions">
@@ -828,16 +882,31 @@
           <input id="installment-nome" type="text" placeholder="Ex.: Notebook" required />
         </div>
 
+        <!-- Dá pra informar o valor de dois jeitos: a parcela (como sempre
+             foi) ou o total da compra, que o app divide pelo nº de parcelas.
+             O segundo é o que permite corrigir "em quantas vezes" numa compra
+             já cadastrada sem ter que recalcular a parcela na mão. -->
+        <div class="field">
+          <label>O valor que vou informar é</label>
+          <div class="segmented" id="installment-valor-modo">
+            <button type="button" data-modo="parcela" class="active">Da parcela</button>
+            <button type="button" data-modo="total">Total da compra</button>
+          </div>
+        </div>
+
         <div class="field-row">
           <div class="field">
-            <label for="installment-valor">Valor da parcela (R$)</label>
-            <input id="installment-valor" type="number" step="0.01" min="0" required />
+            <label for="installment-valor" id="installment-valor-label">Valor da parcela (R$)</label>
+            <input id="installment-valor" type="number" step="0.01" min="0" required
+              oninput="Installments.updateValorHint()" />
           </div>
           <div class="field">
             <label for="installment-categoria">Categoria</label>
             <select id="installment-categoria"></select>
           </div>
         </div>
+
+        <div class="field-hint" id="installment-valor-hint"></div>
 
         <div class="field-row">
           <div class="field">

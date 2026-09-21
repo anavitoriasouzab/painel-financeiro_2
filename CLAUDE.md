@@ -55,6 +55,16 @@ dados do app. Nenhum outro módulo deve chamar o cliente Supabase diretamente
 — sempre passar por `Storage`. Isso permite migrar sem reescrever Dashboard,
 Accounts, Goals, etc.
 
+### Regra crítica — toda tabela de array usa substituição ATÔMICA
+`Storage._writeAll()` apaga e reinsere cada tabela de array a cada save. Para
+as tabelas que importam isso é feito por uma função no Postgres
+(`replace_*`, ver `rpcReplace` em ARRAY_TABLES), que faz delete+insert numa
+transação só — se o insert falhar, o delete desfaz junto. Sem isso, uma falha
+no meio (rede, aba fechada, constraint) deixa a tabela VAZIA. Hoje têm
+proteção: `rendas`, `despesas_recorrentes`, `despesas_variaveis` e
+`parcelamentos`. Tabela nova que guarde algo que a pessoa não possa perder
+nasce com a sua `replace_*` junto.
+
 ### Regra crítica — mudança de schema é sempre uma migration nova
 Nunca editar `0001_init.sql`, `0002_...sql` ou `0003_...sql` depois de
 aplicados. Qualquer alteração de schema vira um arquivo novo e numerado em
@@ -105,10 +115,26 @@ qualquer FK/coluna usada em filtro por usuário.
   fallback duplo em uso normal: fora desse import único do primeiro acesso,
   toda leitura/escrita já vai direto pro Supabase.
 
-### Pendente (ainda não implementado)
-1. `comprovante` e `foto` hoje são salvos como base64 direto na tabela — no
-   futuro, trocar por Supabase Storage (bucket privado) e guardar só a
-   URL/path, para não estourar tamanho de linha nem o plano gratuito
+### Imagens (comprovante de despesa e foto de perfil)
+Ficam no bucket privado `imagens` do Supabase Storage (migration 0015), não
+mais em base64 dentro da linha. As colunas `despesas_variaveis.comprovante` e
+`perfil.foto` continuam `text` e continuam sendo a única referência — o que
+mudou é o CONTEÚDO: guardam o path `<user_id>/<tipo>/<arquivo>`.
+
+- O primeiro segmento do path PRECISA ser o `user_id`: é nele que as policies
+  do bucket se apoiam (`storage.foldername(name)[1]`), do mesmo jeito que a
+  coluna `user_id` nas tabelas
+- O bucket é privado; exibir uma imagem é sempre `Storage.imageSrc(valor)`,
+  que devolve URL assinada (cacheada ~50min). Nunca montar URL pública
+- Valor começando com `data:` é o formato ANTIGO e continua sendo exibido
+  normalmente — `Storage.migrateBase64Images()` roda no fim do `initApp` e
+  converte o que sobrou, de forma idempotente e sem derrubar nada se falhar
+- Quem troca/remove/exclui uma imagem tem que chamar `Storage.removeImage()`
+  no objeto antigo, senão ele fica órfão no bucket pra sempre. O upload só
+  acontece no SALVAR (escolher arquivo e cancelar não pode subir nada)
+- O backup JSON volta a embutir as imagens em base64 na exportação
+  (`Backup.exportJSON`): um path não faz sentido em outra conta, que nem
+  permissão de ler aquele objeto tem
 
 ## Autenticação
 
@@ -155,6 +181,55 @@ etc.) — só precisa que os elementos do HTML já existam.
   valor, sem efeito colateral
 - Mudança no formato dos dados exige incrementar `SCHEMA_VERSION` e
   atualizar a função `migrate()`
+- Parcelamento só pode ser somado num mês em que ele é de fato cobrado —
+  sempre filtrar por `Calc.activeInstallmentsForMonth(data, mes)`, nunca
+  varrer `data.parcelamentos` direto num cálculo que tem um mês de
+  referência. Sem isso, parcela encerrada continua contando nos meses
+  seguintes e o total de uma categoria deixa de bater com a soma das
+  linhas daquele mês
+- O % de "renda comprometida" é só do mês corrente, de propósito. O que já
+  está contratado para os meses seguintes é um número separado
+  (`Calc.calculateFutureCommitments`) — não misturar os dois num
+  percentual só, isso criaria um comprometimento que nenhum mês tem
+- Compra parcelada NÃO vira despesa variável: o formulário de despesa
+  (marcando "Foi uma compra parcelada") grava um item em `parcelamentos`,
+  dividindo o valor TOTAL digitado pelo nº de vezes — ver
+  `Accounts._submitAsInstallment`. É `parcelamentos` que já sabe cobrar só a
+  parcela mês a mês; duplicar essa lógica nas variáveis faria o valor cheio
+  pesar num mês só
+- O bloco "foi parcelada" aparece em QUALQUER despesa única (não exige forma
+  de pagamento "cartão"). Exigir escondia a opção na maioria das despesas já
+  cadastradas, que nasceram sem forma de pagamento — a pessoa abria pra
+  marcar e não achava nada. Parcelamento aqui não depende de cartão:
+  `cartaoId` é nullable, e só é preenchido quando a compra foi mesmo no
+  cartão; só nesse caso o dia de fechamento pode empurrar a 1ª parcela pro
+  mês seguinte
+- Converter é um MOVE entre duas tabelas, então checar duplicata ANTES de
+  mexer em qualquer coisa: `parcelamentos_sem_duplicata` (nome + categoria +
+  valor da parcela + parcelas restantes) faria o insert estourar só na
+  gravação, com a despesa já apagada. A mesma checagem existe nos dois
+  formulários (`Accounts._submitAsInstallment` e `Installments._doSubmitForm`)
+- O mesmo vale ao EDITAR uma despesa variável já cadastrada: marcar
+  "parcelada" CONVERTE o lançamento (apaga a despesa, cria o parcelamento).
+  A conversão pede confirmação porque `parcelamentos` não tem
+  comprovante/status/data, e sem data informada usa o `mesReferencia` da
+  despesa original como mês da 1ª parcela — nunca o mês corrente, senão uma
+  compra de agosto convertida em setembro duraria um mês a mais que a fatura
+- No formulário de parcelamento dá pra informar o valor "da parcela" ou
+  "total da compra" (`Installments.valorModo`) — o segundo divide pelo total
+  de parcelas, que é o que permite corrigir "em quantas vezes" numa compra já
+  cadastrada sem recalcular a parcela na mão. O que fica GRAVADO é sempre
+  `valorParcela`; o modo é só de entrada e reabre em "parcela" a cada edição
+- `parcelaAtual`/`parcelasRestantes` são sempre relativos ao
+  `mesReferenciaAtual`, nunca à data da compra. Uma compra cuja 1ª parcela
+  só cai na fatura do mês que vem se escreve como `parcelaAtual: 0`
+  (`Calc.calculateInstallmentActiveRange` lê isso como "começa no mês
+  seguinte"); uma de meses atrás nasce com `parcelaAtual` já adiantada
+- `inconsistenciasDetectadas` é a única fonte de lembrete que NÃO é
+  recalculada a partir dos dados — por isso dispensá-la tem que gravar
+  `resolvida: true` via `Storage` (ver `Dashboard._resolveInconsistencyIfAny`),
+  e não só no estado local de notificações, que é escopado ao mês e volta
+  na virada
 - Cores e espaçamentos: reutilizar as variáveis CSS já definidas em
   `:root` (`css/style.css`) — não hardcodar valores novos
 
@@ -168,6 +243,15 @@ etc.) — só precisa que os elementos do HTML já existam.
   `css/style.css` próximo à regra `.app-shell`)
 - Conteúdo principal (`.app-main`) deve se adaptar ao espaço restante,
   nunca sobrepor o menu
+- A `.bottom-nav` tem 6 itens e o rótulo de Planejamento é "Planos" só ali:
+  a palavra inteira não cabe em celular nenhum (em 320px sobram ~46px por
+  item pra um rótulo que precisa de ~66px) e era truncada com reticências. A
+  `.side-nav` do desktop continua com "Planejamento"
+- `env(safe-area-inset-bottom)` SOMA na altura da `.bottom-nav`, nunca é
+  só `padding-bottom` sobre uma altura fixa: com o `box-sizing: border-box`
+  global, o inset seria descontado dos 68px e esmagaria ícone+rótulo no app
+  instalado (era a diferença que aparecia entre o app e o site). Quem
+  reserva espaço pra barra (`body`, `.toast`) precisa somar o inset também
 
 ## Definição de pronto (QA obrigatório antes de finalizar qualquer tarefa)
 
