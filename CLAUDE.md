@@ -197,6 +197,10 @@ etc.) — só precisa que os elementos do HTML já existam.
   `Accounts._submitAsInstallment`. É `parcelamentos` que já sabe cobrar só a
   parcela mês a mês; duplicar essa lógica nas variáveis faria o valor cheio
   pesar num mês só
+- O formulário de despesa avisa em que mês a compra cai assim que a data é
+  escolhida (`Accounts.updateMesReferenciaHint`), em âmbar quando não é o mês
+  de referência atual. Usa a MESMA `Calc.calculateExpenseMonth` que grava —
+  se um dia mudar a regra do mês, muda nos dois de uma vez
 - O bloco "foi parcelada" aparece em QUALQUER despesa única (não exige forma
   de pagamento "cartão"). Exigir escondia a opção na maioria das despesas já
   cadastradas, que nasceram sem forma de pagamento — a pessoa abria pra

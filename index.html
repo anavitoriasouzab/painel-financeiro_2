@@ -782,7 +782,13 @@
 
         <div class="field" id="field-data-compra">
           <label for="expense-data">Data (opcional)</label>
-          <input id="expense-data" type="date" />
+          <input id="expense-data" type="date" onchange="Accounts.updateMesReferenciaHint()"
+            oninput="Accounts.updateMesReferenciaHint()" />
+          <!-- Diz em qual mês/fatura a compra vai cair assim que a data é
+               escolhida. Sem isso, uma data digitada errado (ou uma compra
+               depois do fechamento do cartão) só aparecia num mês
+               inesperado DEPOIS de salvar. -->
+          <div class="field-hint" id="expense-data-hint"></div>
         </div>
 
         <div class="field" id="field-forma-pagamento">
@@ -797,7 +803,7 @@
 
         <div class="field" id="field-cartao" style="display:none;">
           <label for="expense-cartao">Cartão usado</label>
-          <select id="expense-cartao"></select>
+          <select id="expense-cartao" onchange="Accounts.updateMesReferenciaHint()"></select>
         </div>
 
         <!-- Compra parcelada no cartão: o valor digitado acima passa a ser o

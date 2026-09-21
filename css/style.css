@@ -1700,6 +1700,13 @@ section.view.active { display: block; animation: view-fade-in 0.25s ease; }
 
 /* Texto de apoio abaixo de um campo (ex.: a previsão "2x de R$ 50,00"). */
 .field-hint { font-size: 12px; color: var(--purple-text); margin-top: 6px; line-height: 1.4; }
+/* Mês de destino diferente do mês de referência atual: âmbar em vez de roxo.
+   Não é erro (pode ser proposital), é só o caso que surpreende — foi assim
+   que uma despesa com a data digitada errada foi parar num mês futuro sem
+   ninguém notar. */
+.field-hint-alerta { color: var(--warning-text, #966319); font-weight: 600; }
+[data-theme="dark"] .field-hint-alerta { color: #F0C674; }
+
 /* Quando o hint não está DENTRO de um .field (é irmão dele, comentando a
    linha inteira acima — caso do valor do parcelamento), ele não herda o
    margin-bottom do .field e encostava no rótulo do campo seguinte. */

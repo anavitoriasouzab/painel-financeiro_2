@@ -305,6 +305,7 @@ function setupExpenseModal() {
       // Recorrente não tem parcela — o bloco de "compra parcelada" precisa
       // sumir (e desmarcar) ao trocar o tipo, não só ao abrir o formulário.
       Accounts._toggleParceladoFields();
+      Accounts.updateMesReferenciaHint();
     });
   });
 

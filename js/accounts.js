@@ -224,6 +224,7 @@ const Accounts = {
     this._populateCartaoSelect(item ? item.cartaoId : null);
     document.getElementById('field-vencimento').style.display = isRecorrente ? 'block' : 'none';
     this._toggleParceladoFields();
+    this.updateMesReferenciaHint();
 
     // Aviso de reconhecimento de voz (ver VoiceExpense) some por padrão —
     // só reaparece quando é a própria VoiceExpense quem preenche o formulário
@@ -249,6 +250,9 @@ const Accounts = {
   handleFormaPagamentoChange() {
     this._toggleCartaoField();
     this._toggleParceladoFields();
+    // A forma de pagamento muda o mês de destino (só no cartão o fechamento
+    // empurra pra fatura seguinte), então o aviso tem que ser recalculado.
+    this.updateMesReferenciaHint();
   },
 
   _toggleCartaoField() {
@@ -298,8 +302,55 @@ const Accounts = {
     this.updateParcelaHint();
   },
 
+  /**
+   * Mostra em que mês a despesa vai cair, assim que a data é escolhida.
+   * O cálculo é o mesmo que grava (Calc.calculateExpenseMonth), então o
+   * aviso nunca pode divergir do que acontece ao salvar.
+   *
+   * Destaca quando o mês NÃO é o de referência atual — é o caso que
+   * surpreende: uma data digitada errada, ou uma compra feita depois do
+   * fechamento do cartão, que vai pra fatura do mês seguinte.
+   */
+  updateMesReferenciaHint() {
+    const hint = document.getElementById('expense-data-hint');
+    if (!hint) return;
+    const dataCompra = document.getElementById('expense-data').value;
+    if (!dataCompra) {
+      // Sem data, a despesa cai no mês de referência atual (ou preserva o
+      // mês já salvo, ao editar) — comportamento esperado, não precisa aviso.
+      hint.textContent = '';
+      hint.classList.remove('field-hint-alerta');
+      return;
+    }
+
+    const formaPagamento = document.getElementById('expense-forma-pagamento').value || null;
+    const cartaoSelect = document.getElementById('expense-cartao');
+    const cartaoId = (formaPagamento === 'cartao' && cartaoSelect && cartaoSelect.value) || null;
+    const mesDestino = Calc.calculateExpenseMonth(appData, dataCompra, formaPagamento, cartaoId);
+    const mesAtual = appData.meta.mesReferenciaAtual;
+    const mesmoMesDaCompra = dataCompra.slice(0, 7) === mesDestino;
+
+    const parcelado = document.getElementById('expense-parcelado');
+    const ehParcelado = parcelado && parcelado.checked && parcelado.offsetParent !== null;
+    const oQue = ehParcelado ? '1ª parcela' : (document.getElementById('expense-type').value === 'recorrente' ? 'Passa a contar' : 'Entra');
+
+    let texto = `${oQue} em ${formatMonthKey(mesDestino)}`;
+    if (!mesmoMesDaCompra) {
+      // Só o fechamento do cartão empurra o mês — vale dizer qual dia foi,
+      // senão o mês "errado" parece arbitrário.
+      const cartao = (cartaoId && appData.cartoes.find((c) => c.id === cartaoId)) || appData.cartoes[0];
+      const dia = cartao && cartao.diaFechamento;
+      texto += dia != null ? ` — compras a partir do dia ${dia} caem na fatura seguinte` : ' — cai na fatura seguinte';
+    }
+    if (mesDestino !== mesAtual) texto += ` (não no mês atual, ${formatMonthKey(mesAtual)})`;
+
+    hint.textContent = texto;
+    hint.classList.toggle('field-hint-alerta', mesDestino !== mesAtual);
+  },
+
   handleParceladoChange() {
     this._toggleParceladoFields();
+    this.updateMesReferenciaHint();
     if (document.getElementById('expense-parcelado').checked) {
       document.getElementById('expense-parcelas').focus();
     }
