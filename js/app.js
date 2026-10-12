@@ -11,11 +11,106 @@ let appData = null;
 /** Confere se há uma sessão Supabase válida; sem ela, manda pra tela de login. */
 async function requireAuth() {
   const { data } = await supabaseClient.auth.getSession();
-  if (!data || !data.session) {
-    window.location.href = 'login.html';
+  if (data && data.session) return data.session;
+  // Sem internet o supabase-js não consegue renovar o token (vence a cada
+  // ~1h) e devolve sessão nula — mas a pessoa continua logada, o token
+  // segue guardado. Offline, segue com o usuário guardado (o app abre só
+  // pra leitura); com rede, sessão nula é sessão nula.
+  if (!navigator.onLine) {
+    const user = storedSessionUser();
+    if (user) return { user };
+  }
+  window.location.href = 'login.html';
+  return null;
+}
+
+/** Usuário da última sessão guardada pelo supabase-js, sem rede. */
+function storedSessionUser() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(SUPABASE_AUTH_STORAGE_KEY) || 'null');
+    const user = raw && (raw.user || (raw.currentSession && raw.currentSession.user));
+    return user && user.id ? user : null;
+  } catch (e) {
     return null;
   }
-  return data.session;
+}
+
+/* ---------------------------- Modo offline ---------------------------- */
+
+/** Só leitura: dados vindos da cópia local, ou sem rede neste momento. */
+function modoSomenteLeitura() {
+  return !!Storage.offline || !navigator.onLine;
+}
+
+/** "12/10 às 14:30" */
+function formatarMomento(iso) {
+  const d = new Date(iso);
+  return `${d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} às ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+}
+
+/**
+ * Faixa fixa no topo (#offline-banner) — no lugar do toast de 2s, que
+ * sumia antes de dar pra ler. Estados:
+ * - semDados: sem internet e sem cópia guardada neste aparelho
+ * - cópia: mostrando os dados guardados (Storage.offline)
+ * - sem rede no meio do uso: os dados na tela são os de agora, mas não grava
+ * - voltou: conexão de volta enquanto estava em um dos estados acima
+ */
+function atualizarFaixaOffline(estado) {
+  const faixa = document.getElementById('offline-banner');
+  if (!faixa) return;
+  const texto = document.getElementById('offline-banner-text');
+  const btn = document.getElementById('offline-banner-btn');
+  const msgs = {
+    semDados: 'Sem internet, e ainda não há dados guardados neste aparelho. Conecte-se e abra o app de novo.',
+    copia: Storage.offline ? `Sem internet. Mostrando seus dados de ${formatarMomento(Storage.offline.salvoEm)}. Lançar e editar volta com a conexão.` : '',
+    semRede: 'Sem internet. Dá pra consultar tudo, mas lançar e editar só com conexão.',
+    voltou: 'Conexão de volta.',
+  };
+  if (!estado) { faixa.hidden = true; return; }
+  texto.textContent = msgs[estado];
+  btn.hidden = estado !== 'voltou';
+  const icone = document.getElementById('offline-banner-icon');
+  if (icone) icone.textContent = estado === 'voltou' ? 'cloud_done' : 'cloud_off';
+  faixa.classList.toggle('is-online', estado === 'voltou');
+  faixa.hidden = false;
+}
+
+/**
+ * Liga a faixa e barra as ações que gravam enquanto estiver só-leitura —
+ * antes, sem rede, o "+" simplesmente não respondia. A trava é por captura
+ * no document: pega o clique antes dos handlers de cada tela, sem precisar
+ * mexer em cada botão. Storage.save() tem a mesma trava como última linha.
+ */
+function setupOfflineMode(estadoInicial) {
+  const ACOES_QUE_GRAVAM = [
+    '[data-voice-trigger]', '.nav-item.add-btn', '#new-item-btn', '#add-renda-btn',
+    '[data-action="edit"]', '[data-action="delete"]', '[data-requires-online]',
+  ].join(', ');
+  const avisar = () => toast('Sem internet: dá pra ver seus dados, mas lançar e editar só com conexão.');
+  document.addEventListener('click', (e) => {
+    if (!modoSomenteLeitura()) return;
+    if (!e.target.closest(ACOES_QUE_GRAVAM)) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    avisar();
+  }, true);
+  document.addEventListener('submit', (e) => {
+    if (!modoSomenteLeitura()) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    avisar();
+  }, true);
+
+  const btn = document.getElementById('offline-banner-btn');
+  if (btn) btn.addEventListener('click', () => window.location.reload());
+  window.addEventListener('offline', () => atualizarFaixaOffline(Storage.offline ? 'copia' : 'semRede'));
+  window.addEventListener('online', () => {
+    // Com a cópia (ou sem dados), recarregar é o que traz o atual do
+    // Supabase; se a queda foi só no meio do uso, os dados já são os atuais.
+    atualizarFaixaOffline(Storage.offline || estadoInicial === 'semDados' ? 'voltou' : null);
+  });
+  atualizarFaixaOffline(estadoInicial);
 }
 
 async function initApp(session) {
@@ -210,6 +305,8 @@ function bindLogoutButton(btn, askConfirmation) {
   btn.addEventListener('click', async () => {
     if (askConfirmation && !await confirmDialog('Tem certeza que quer sair da conta?', { title: 'Sair da conta', confirmLabel: 'Sair' })) return;
     btn.disabled = true;
+    // A cópia offline é desta conta: não pode ficar no aparelho depois de sair.
+    Storage.clearOfflineSnapshot();
     await supabaseClient.auth.signOut();
     window.location.href = 'login.html';
   });
@@ -438,13 +535,22 @@ function setupUnsavedChangesGuard() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+  // Offline sem a biblioteca do Supabase (ainda não guardada pelo service
+  // worker): mostra o aviso em vez de uma tela em branco.
+  if (!supabaseClient) {
+    document.documentElement.classList.add('authed');
+    setupOfflineMode('semDados');
+    return;
+  }
   const session = await requireAuth();
   if (session) {
     document.documentElement.classList.add('authed');
     try {
       await initApp(session);
+      setupOfflineMode(Storage.offline ? 'copia' : (navigator.onLine ? null : 'semRede'));
     } catch (e) {
       console.error('Falha ao iniciar o app.', e);
+      setupOfflineMode(navigator.onLine ? null : 'semDados');
     }
   }
 });

@@ -1367,6 +1367,41 @@ section.view.active { display: block; animation: view-fade-in 0.25s ease; }
 .icon-btn.is-listening { background: var(--danger-bg); color: var(--danger); border-color: var(--danger); }
 [hidden] { display: none !important; }
 
+/* Faixa de "sem internet" no topo do conteúdo (ver setupOfflineMode).
+   Âmbar = atenção, não erro: dá pra continuar consultando. Vira roxa
+   quando a conexão volta, com o botão de atualizar. */
+.offline-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  /* Entre o cabeçalho e o <main>: mesma margem lateral dos dois (20px no
+     celular, 40px no desktop — ver main em @media 860px). */
+  margin: 8px 20px 4px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: var(--warning-bg);
+  color: var(--warning);
+  font-size: 13px;
+  line-height: 1.4;
+}
+.offline-banner .material-symbols-outlined { font-size: 20px; flex-shrink: 0; }
+.offline-banner-text { flex: 1; min-width: 0; color: var(--text-primary); }
+.offline-banner.is-online { background: var(--purple-soft); color: var(--purple-text); }
+.offline-banner-btn {
+  flex-shrink: 0;
+  min-height: 36px;
+  padding: 6px 14px;
+  border: none;
+  border-radius: 999px;
+  background: var(--purple-600);
+  color: var(--text-on-accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+@media (pointer: coarse) { .offline-banner-btn { min-height: 44px; } }
+@media (min-width: 860px) { .offline-banner { margin: 8px 40px 0; max-width: 1200px; } }
+
 /* Par do .mobile-only: só existe a partir de 860px (onde a sidebar aparece). */
 @media (max-width: 859px) {
   .desktop-only { display: none !important; }

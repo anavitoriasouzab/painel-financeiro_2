@@ -146,6 +146,14 @@
           </button>
         </div>
       </header>
+      <!-- Faixa de "sem internet" (ver setupOfflineMode em app.js). Fica DEPOIS do
+           cabeçalho: no topo da tela, no app instalado, a barra de status do
+           celular passa por cima. -->
+      <div class="offline-banner" id="offline-banner" role="status" aria-live="polite" hidden>
+        <span class="material-symbols-outlined" id="offline-banner-icon" aria-hidden="true">cloud_off</span>
+        <span class="offline-banner-text" id="offline-banner-text"></span>
+        <button type="button" class="offline-banner-btn" id="offline-banner-btn" hidden>Atualizar</button>
+      </div>
 
       <main>
 
@@ -1310,7 +1318,11 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <!-- Versão FIXA: o service worker guarda esta URL pra o app abrir offline
+       (ver CDN_CACHE em sw.js). Com "@2" solto, a versão mudaria sozinha por
+       baixo de um arquivo já guardado. Atualizar = trocar o número aqui e
+       em login.html e sw.js. -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
   <script src="js/supabase-config.js"></script>
   <script src="js/shader-background.js"></script>
   <script src="js/simplecharts.js"></script>

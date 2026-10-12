@@ -115,6 +115,26 @@ qualquer FK/coluna usada em filtro por usuário.
   fallback duplo em uso normal: fora desse import único do primeiro acesso,
   toda leitura/escrita já vai direto pro Supabase.
 
+### Offline (service worker + cópia só-leitura)
+- `sw.js` guarda o app shell (`pf-shell-vN`) e, num cache separado que
+  sobrevive às trocas de versão (`pf-cdn-v1`), o que vem de CDN: supabase-js,
+  fontes/ícones do Google e as libs do PDF. Sem isso o app abria offline em
+  BRANCO quando o navegador já tinha descartado a cópia própria da CDN. A
+  supabase-js tem versão FIXA (2.117.3) em index.html, login.html e sw.js:
+  atualizar = trocar nos três. A API do Supabase (*.supabase.co) nunca passa
+  pelo cache do service worker
+- `Storage` guarda em `localStorage[financas_offline_v1]` uma cópia dos
+  últimos dados lidos/gravados com sucesso ({ uid, salvoEm, data }). Sem rede,
+  `load()` devolve essa cópia (só se o uid bater) e marca `Storage.offline`.
+  É SÓ LEITURA: `save()` não grava nada offline (gravar a cópia por cima do
+  Supabase podia apagar o que foi feito em outro aparelho depois dela), e
+  `setupOfflineMode` (app.js) barra por captura as ações que gravam. Não é
+  fila de sincronização — lançar offline e sincronizar depois é outro projeto.
+  Sair da conta e "Excluir todos os dados" apagam a cópia
+- Sem rede, o supabase-js não renova o token (~1h) e `getSession()` volta
+  nula; `requireAuth` então usa o usuário da sessão guardada
+  (`SUPABASE_AUTH_STORAGE_KEY`). Com rede, sessão nula continua sendo login
+
 ### Imagens (comprovante de despesa e foto de perfil)
 Ficam no bucket privado `imagens` do Supabase Storage (migration 0015), não
 mais em base64 dentro da linha. As colunas `despesas_variaveis.comprovante` e

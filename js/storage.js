@@ -18,6 +18,11 @@
  */
 
 const STORAGE_KEY = 'financas_app_v1'; // usado só para importar dados antigos de localStorage (ver load()).
+// Cópia dos últimos dados lidos/gravados com sucesso, pra mostrar SÓ PRA
+// LEITURA quando o app abre sem internet (ver load() e Storage.offline).
+// Não é fonte de verdade nem fila de sincronização: nunca é gravada de volta
+// no Supabase. Vale só pra mesma conta (uid) e some ao sair da conta.
+const OFFLINE_SNAPSHOT_KEY = 'financas_offline_v1';
 const SCHEMA_VERSION = 10;
 
 function generateId(prefix) {
@@ -309,6 +314,60 @@ const Storage = {
     this._userId = userId || this._userId;
     const uid = await this._resolveUserId();
     try {
+      const data = await this._loadRemote(uid);
+      this._saveSnapshot(data, uid);
+      return data;
+    } catch (e) {
+      // Sem rede: mostra a última cópia guardada desta conta, só pra leitura.
+      const snap = this._isNetworkError(e) ? this._readSnapshot(uid) : null;
+      if (snap) {
+        this.offline = { salvoEm: snap.salvoEm };
+        return migrate(snap.data);
+      }
+      throw e;
+    }
+  },
+
+  /**
+   * Não-nulo quando os dados na tela são a cópia local (app aberto sem
+   * internet): { salvoEm: ISO }. Enquanto isso, save() não grava nada —
+   * a cópia pode estar atrás do que já está no Supabase.
+   */
+  offline: null,
+
+  /** Sem rede, ou o fetch do Supabase falhou por rede (não por regra/RLS). */
+  _isNetworkError(e) {
+    if (!navigator.onLine) return true;
+    const msg = String((e && (e.message || e.details)) || e || '');
+    return /failed to fetch|networkerror|network request failed|load failed|err_internet|fetch/i.test(msg);
+  },
+
+  _saveSnapshot(data, uid) {
+    try {
+      localStorage.setItem(OFFLINE_SNAPSHOT_KEY, JSON.stringify({ uid, salvoEm: new Date().toISOString(), data }));
+    } catch (e) {
+      // Cota cheia ou modo privado: o app segue normal, só sem cópia offline.
+      console.warn('Não deu pra guardar a cópia offline dos dados.', e);
+    }
+  },
+
+  _readSnapshot(uid) {
+    try {
+      const snap = JSON.parse(localStorage.getItem(OFFLINE_SNAPSHOT_KEY) || 'null');
+      return snap && snap.uid === uid && snap.data ? snap : null;
+    } catch (e) {
+      return null;
+    }
+  },
+
+  /** Apaga a cópia local (sair da conta / excluir todos os dados). */
+  clearOfflineSnapshot() {
+    try { localStorage.removeItem(OFFLINE_SNAPSHOT_KEY); } catch (e) { /* nada a fazer */ }
+  },
+
+  /** Leitura do Supabase (com o seed do primeiro login). Erros sobem pra load() decidir se cai na cópia offline. */
+  async _loadRemote(uid) {
+    try {
       const hasData = await this._hasRemoteData(uid);
       if (!hasData) {
         const seed = this._buildFirstLoginSeed();
@@ -332,8 +391,10 @@ const Storage = {
       return await this._readAll(uid);
     } catch (e) {
       console.error('Falha ao carregar dados do Supabase.', e);
-      if (typeof toast === 'function') {
-        toast('⚠️ Não foi possível carregar seus dados. Verifique sua conexão e recarregue a página.');
+      // Sem rede, quem avisa é a faixa fixa de "sem internet" (app.js) —
+      // um toast de 2s aqui sumia antes de dar pra ler.
+      if (typeof toast === 'function' && !this._isNetworkError(e)) {
+        toast('⚠️ Não foi possível carregar seus dados. Recarregue a página.');
       }
       throw e;
     }
@@ -341,10 +402,19 @@ const Storage = {
 
   /** Salva o objeto de dados inteiro (substituição completa das tabelas). */
   async save(data) {
+    // Dados da cópia offline (ou sem rede agora): não grava. Gravar a cópia
+    // por cima do Supabase podia apagar o que foi feito em outro aparelho
+    // depois dela. As ações de gravar já são barradas antes (ver
+    // setupOfflineMode em app.js); isto é a última trava.
+    if (this.offline || !navigator.onLine) {
+      if (typeof toast === 'function') toast('Sem internet: essa alteração não foi salva.');
+      return;
+    }
     this._pendingSaves++;
     try {
       const uid = await this._resolveUserId();
       await this._writeAll(data, uid);
+      this._saveSnapshot(data, uid);
     } catch (e) {
       console.error('Falha ao salvar no Supabase.', e);
       if (typeof toast === 'function') {
@@ -473,6 +543,7 @@ const Storage = {
    * tenta de novo no próximo carregamento.
    */
   async migrateBase64Images(data) {
+    if (this.offline || !navigator.onLine) return 0; // precisa do bucket — fica pra próxima abertura online
     const pendentes = [];
     (data.despesasVariaveis || []).forEach((d) => {
       if (this.isDataUrl(d.comprovante)) pendentes.push({ set: (v) => { d.comprovante = v; }, valor: d.comprovante, tipo: 'comprovante' });
@@ -500,6 +571,7 @@ const Storage = {
   /** Apaga todos os dados da conta atual (usado em "Excluir todos os dados", com confirmação dupla). */
   async clearAll() {
     const uid = await this._resolveUserId();
+    this.clearOfflineSnapshot();
     // Apagar os dados tem que levar as imagens junto — elas não estão mais
     // dentro das linhas, então um delete nas tabelas não as alcança mais.
     await this._removeAllImages(uid);

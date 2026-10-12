@@ -117,6 +117,20 @@ funcionar fora do navegador.
 referência). "quarenta reais" por extenso não vira 40; o Chrome costuma
 mandar em algarismo, mas nem sempre.
 
+### [x] Versão offline: tela em branco, app vazio e "+" sem resposta (12/10/2026)
+**Feito:** o service worker passou a guardar a biblioteca do Supabase, as
+fontes e os ícones (antes: tela em branco offline quando o navegador
+descartava essa cópia); cópia só-leitura dos últimos dados no aparelho, com
+faixa "Mostrando seus dados de 12/10 às 14:30"; login vencido não manda mais
+pro login offline; "+", voz, editar e excluir explicam que precisa de
+conexão; "Conexão de volta" com botão Atualizar. **Falta testar no celular:**
+abrir o app instalado em modo avião.
+
+### [ ] Lançar despesa offline e sincronizar depois
+Hoje offline é só leitura. Lançar sem rede pede uma fila de alterações e um
+jeito de juntar com o Supabase sem duplicar nem perder nada — o save atual
+regrava tabelas inteiras, então não dá pra simplesmente "salvar depois".
+
 ## P3
 
 ### [ ] Toques e animações mais leves no celular (audit 07/10/2026)
