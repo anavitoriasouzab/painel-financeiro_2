@@ -242,6 +242,40 @@ etc.) — só precisa que os elementos do HTML já existam.
   `Calc.historicoArquivado(data)`
 - Cores e espaçamentos: reutilizar as variáveis CSS já definidas em
   `:root` (`css/style.css`) — não hardcodar valores novos
+- Fontes: Sora (`--font-display`: títulos e valores grandes) + Inter
+  (`--font-body`: rótulos, datas, texto miúdo). A Inter é escolha mantida de
+  propósito: em 12/10/2026 foi comparada no próprio app com Manrope, IBM Plex
+  Sans e Instrument Sans, e ficou por ser a mais legível em 11-13px no tema
+  escuro. A personalidade do app está na Sora, não no corpo
+- Lançar por voz (`js/voice-expense.js`): todo botão com `[data-voice-trigger]`
+  dispara e mostra o estado "ouvindo" (barra "Fale um gasto" no topo do
+  Dashboard no celular, ícone no cabeçalho no desktop, botão em Contas). Nunca
+  salva sozinho: abre o formulário pré-preenchido. Valor em pt-BR: "1.250" é
+  MIL duzentos e cinquenta (ponto de milhar), não 1,25; palavra-chave casa
+  palavra inteira e fora do trecho do valor (o "99" de "199,90" virava
+  corrida). Categoria não reconhecida fica EM BRANCO (select `required`),
+  nunca a 1ª da lista. Erros vão pra toast/`confirmDialog`, nunca `alert()`
+- Categoria nova é criada SÓ por `openNewCategoryDialog()` (js/accounts.js,
+  pop-up `#category-modal`), nunca por `prompt()` nativo. Ela barra nome
+  repetido sem diferenciar maiúsculas: `categorias` tem chave (`user_id`,
+  `nome`), então uma duplicata derrubava o save inteiro, e "mercado" ao lado
+  de "Mercado" racharia o mesmo gasto em duas fatias nos gráficos
+- O PDF do relatório mensal é um ARQUIVO gerado em `Report.exportPdf`
+  (html2canvas + jsPDF, carregados da cdnjs só no clique, com SRI), nunca
+  `window.print()`: no celular/app instalado a impressão saía como página
+  preta e vazia. A cópia que vira PDF tem largura fixa de folha
+  (`.report-pdf-host`, 760px), por isso o layout estreito do relatório usa
+  `@container report`, não media query: a largura da tela não pode mudar
+  o PDF. No celular a entrega é pelo Compartilhar do sistema, e no computador
+  por download. `@media print` ficou só como reserva no computador, para
+  quando a CDN não carrega. A folha do relatório é sempre clara: gráfico
+  ali usa `SimpleCharts.paletteLight` direto, porque `colorFor()` segue o tema
+  do `<html>`
+- Ordem do relatório: resumo (com a frase de comprometimento) → insights →
+  gráficos → compromissos → metas → "Compras do mês" (extrato completo, por
+  último, como anexo). Conclusão antes do detalhe. Não recriar um "top N de
+  despesas": seria a cópia das primeiras linhas do extrato, que já vem
+  ordenado por valor (já existiu e saiu em 12/10/2026)
 
 ## Layout / responsividade
 
@@ -262,6 +296,21 @@ etc.) — só precisa que os elementos do HTML já existam.
   global, o inset seria descontado dos 68px e esmagaria ícone+rótulo no app
   instalado (era a diferença que aparecia entre o app e o site). Quem
   reserva espaço pra barra (`body`, `.toast`) precisa somar o inset também
+
+- Alvo de toque: 44px em tela de toque, via `@media (pointer: coarse)`
+  (não por largura de tela — é dedo vs. mouse). Onde aumentar o desenho
+  empurraria o layout, só a área cresce, com um `::after` invisível (ver
+  `.mini-btn.icon-btn` e `.eye-btn`). No mouse fica o desenho compacto
+- Título de seção é `<h2 class="section-title">` e título de card é
+  `<h3 class="chart-mini-title">` (não `<div>`): é o que deixa o leitor de
+  tela pular entre seções. O visual vem só das classes (ver o `:where()`
+  antes de `.section-title` em style.css)
+- O login é SEMPRE escuro (`data-theme="dark"` fixo em login.html), ignorando
+  o tema do app: o fundo dele é sempre escuro, e os estilos claros do cartão
+  deixavam o formulário ilegível
+- Contraste de texto é conferido contra `--surface-soft`, a superfície mais
+  difícil de cada tema, não contra o card: `--text-muted` foi recalibrado em
+  07/10/2026 justamente porque passava no card e falhava ali
 
 ## Definição de pronto (QA obrigatório antes de finalizar qualquer tarefa)
 

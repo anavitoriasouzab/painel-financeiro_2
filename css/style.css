@@ -29,8 +29,12 @@
   --purple-soft: var(--purple-100);
 
   --text-primary: #201A33;
-  --text-secondary: #6B6480;
-  --text-muted: #78708C;
+  /* Secundário e muted conferidos contra --surface-soft (#ECE6F8), a
+     superfície mais escura onde eles aparecem: 6,1:1 e 4,7:1. O muted antigo
+     (#78708C) dava 3,8:1 ali, abaixo do AA (4,5:1); escurecê-lo sozinho o
+     deixaria igual ao secundário, por isso o secundário desceu junto. */
+  --text-secondary: #58526D;
+  --text-muted: #6A627E;
 
   /* Texto por cima de fundo cheio (botão roxo, toast): no claro é branco
      puro mesmo — o contraste com o roxo é o que sustenta a leitura. No
@@ -42,7 +46,9 @@
   --success-bg: #E4F7EF;
   --warning: #966319;
   --warning-bg: #FBF0DD;
-  --danger: #C0392B;
+  /* #C0392B dava 4,46:1 sobre --surface-soft (texto de "Excluir" no
+     .mini-btn.danger) — um tom abaixo passa no AA: 4,8:1. */
+  --danger: #B9362A;
   --danger-bg: #FBE7E4;
 
   --radius-sm: 10px;
@@ -88,14 +94,19 @@
      sem refazer a conta de contraste. */
   --text-primary: #CFD4E3;
   --text-secondary: #9CA3B8;
-  --text-muted: #6B7288;
+  /* 4,6:1 sobre --surface-soft (a superfície mais clara do escuro) e 5,0:1
+     sobre --surface. O anterior (#6B7288) dava 3,4:1 e 3,7:1, abaixo do AA —
+     justo no texto que costuma ser o menor da tela (legendas, datas). */
+  --text-muted: #81889D;
   /* 6,1:1 sobre --purple-600 e 12,9:1 sobre --purple-900 — AA garantido
      nos dois fundos cheios onde ele é usado. */
   --text-on-accent: #EFEDF9;
 
   --success: #34D399;
   --warning: #FBBF24;
-  --danger: #F87171;
+  /* #F87171 dava 4,41:1 no selo "Vencido" (texto sobre o próprio
+     --danger-bg). Um tom acima passa no AA com folga: 4,9:1. */
+  --danger: #F98181;
   /* Badges com mais corpo no escuro — 16% de opacidade ficava "apagado"
      perto de um fundo quase preto; 24% dá o efeito "chip aceso" sem virar
      um bloco sólido que brigaria com o texto. */
@@ -139,8 +150,8 @@
   --purple-soft: var(--purple-100);
 
   --text-primary: #201A33;
-  --text-secondary: #6B6480;
-  --text-muted: #78708C;
+  --text-secondary: #58526D;
+  --text-muted: #6A627E;
 
   /* Texto por cima de fundo cheio (botão roxo, toast): no claro é branco
      puro mesmo — o contraste com o roxo é o que sustenta a leitura. No
@@ -152,7 +163,7 @@
   --success-bg: #E4F7EF;
   --warning: #966319;
   --warning-bg: #FBF0DD;
-  --danger: #C0392B;
+  --danger: #B9362A;
   --danger-bg: #FBE7E4;
 
   --shadow-card: 0 1px 2px rgba(44, 27, 87, 0.04), 0 8px 24px -12px rgba(76, 46, 158, 0.18);
@@ -515,6 +526,31 @@ section.view.active { display: block; animation: view-fade-in 0.25s ease; }
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* Títulos de seção (h2) e de card (h3) são cabeçalhos de verdade pra quem
+   navega por leitor de tela, mas o visual continua o das classes abaixo.
+   :where() zera só o que o navegador põe por padrão num h2/h3 (margem,
+   tamanho, peso) com especificidade 0 — qualquer regra das classes vence. */
+:where(h2.section-title, .section-title h2, h3.chart-mini-title, h3.raiox-title) {
+  margin: 0;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+}
+
+/* Texto só pro leitor de tela (ex.: o h2 do Dashboard, que não tem título
+   de seção visível). */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .section-title {
   font-family: var(--font-display);
   font-size: 15px;
@@ -592,6 +628,10 @@ section.view.active { display: block; animation: view-fade-in 0.25s ease; }
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 12px;
 }
+/* Sem o card de Reserva (só aparece pra quem a cadastrou), sobram 3 cards
+   na grade 2×2 e "Disponível" ficava sozinho com um buraco ao lado. Ele é o
+   número que responde "quanto ainda posso gastar", então ganha a linha. */
+.stat-grid--sem-reserva .stat-card--saldo { grid-column: 1 / -1; }
 
 .stat-card {
   background: var(--surface-glass);
@@ -605,6 +645,26 @@ section.view.active { display: block; animation: view-fade-in 0.25s ease; }
   min-width: 0;
   transition: background 0.15s ease, border-color 0.15s ease;
 }
+
+/* Métricas DENTRO de outro card (ex.: "Próximo mês" em Análises e
+   Planejamento): sem a moldura própria do .stat-card (borda, sombra, vidro) —
+   eram cards dentro de card. Fica só o fundo suave, um nível abaixo do card
+   que as contém. */
+/* O seletor com [data-theme="dark"] é pra vencer o
+   [data-theme="dark"] .stat-card { border-color } mais abaixo (mesma
+   especificidade, vinha depois e trazia a borda de volta no escuro). */
+.card .stat-card,
+[data-theme="dark"] .card .stat-card {
+  background: var(--surface-soft);
+  border-color: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  border-radius: var(--radius-md);
+  min-height: 0;
+}
+/* A trilha da barra tinha a mesma cor do novo fundo e sumia. */
+.card .stat-card .progress-track { background: var(--border); }
 
 .stat-card .label {
   font-size: 12.5px;
@@ -1192,6 +1252,9 @@ section.view.active { display: block; animation: view-fade-in 0.25s ease; }
   main { max-width: 1280px; padding: 24px 40px; margin: 0; }
 
   .stat-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  /* Mesmo caso no desktop: 3 cards em 4 colunas deixavam a última vazia. */
+  .stat-grid--sem-reserva { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .stat-grid--sem-reserva .stat-card--saldo { grid-column: auto; }
   .stat-card { padding: 14px 12px; border-radius: var(--radius-md); }
   .raiox-card { border-radius: var(--radius-lg); }
   .stat-card .value { font-size: 18px; line-height: 24px; min-height: 24px; }
@@ -1301,6 +1364,57 @@ section.view.active { display: block; animation: view-fade-in 0.25s ease; }
   50% { box-shadow: 0 0 0 7px rgba(192, 57, 43, 0); }
 }
 [data-theme="dark"] .mic-btn.is-listening { box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.35); }
+.icon-btn.is-listening { background: var(--danger-bg); color: var(--danger); border-color: var(--danger); }
+[hidden] { display: none !important; }
+
+/* Par do .mobile-only: só existe a partir de 860px (onde a sidebar aparece). */
+@media (max-width: 859px) {
+  .desktop-only { display: none !important; }
+}
+
+/* "Fale um gasto" — lançar por voz em destaque no topo do Dashboard
+   (celular/tablet; no desktop o ícone do cabeçalho faz o papel). Largura
+   toda e 64px de altura: alvo grande pro polegar, e é a 1ª ação da tela.
+   O círculo roxo cheio é o que puxa o olho; o resto é o card de sempre. */
+.voice-cta {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 64px;
+  margin-bottom: 14px;
+  padding: 10px 16px 10px 10px;
+  background: var(--surface-glass);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-card);
+  color: var(--text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+.voice-cta:active { transform: scale(0.98); }
+.voice-cta-icon {
+  width: 46px;
+  height: 46px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--purple-600);
+  color: var(--text-on-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.voice-cta-icon .material-symbols-outlined { font-size: 24px; }
+.voice-cta-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.voice-cta-title { font-family: var(--font-display); font-weight: 600; font-size: 15px; }
+.voice-cta-sub { font-size: 12.5px; color: var(--text-muted); }
+/* Ouvindo: o círculo vira o mesmo vermelho pulsante do popup. */
+.voice-cta.is-listening { border-color: var(--danger); }
+.voice-cta.is-listening .voice-cta-icon { background: var(--danger); animation: mic-pulse 1.2s ease-in-out infinite; }
 
 /* Aviso do texto reconhecido por voz (ver VoiceExpense) — some por padrão;
    só aparece quando o formulário foi aberto a partir do mic, pra deixar
@@ -1386,21 +1500,25 @@ section.view.active { display: block; animation: view-fade-in 0.25s ease; }
 .account-main { display: flex; flex-direction: column; }
 .account-main .badge { display: block; width: fit-content; margin-top: 6px; }
 
-/* Despesas recentes (Dashboard) — linha em pílula com ícone de categoria,
+/* Despesas recentes (Dashboard) — linha de lista com ícone de categoria,
    só pra esse card (ver Dashboard._renderRecentExpenses); o resto do app
-   continua com .account-card em grade. */
+   continua com .account-card em grade. Sem borda nem fundo próprios: antes
+   cada linha era uma pílula com moldura DENTRO do card (card dentro de
+   card); o ícone e o valor alinhado à direita já separam uma da outra. O
+   fundo aparece só no toque/hover/foco, como resposta. A margem negativa
+   alinha o ícone com o título do card. */
 .tx-row {
   display: flex;
   align-items: center;
   gap: 12px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 8px 16px 8px 8px;
+  background: transparent;
+  border-radius: var(--radius-md);
+  padding: 8px;
+  margin: 0 -8px;
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition: background 0.15s ease;
 }
-.tx-row:hover, .tx-row:focus-visible { background: var(--surface-soft); border-color: var(--purple-300); }
+.tx-row:hover, .tx-row:focus-visible { background: var(--surface-soft); }
 .tx-icon {
   width: 40px; height: 40px;
   border-radius: 50%;
@@ -1475,6 +1593,31 @@ section.view.active { display: block; animation: view-fade-in 0.25s ease; }
 }
 .mini-btn.icon-btn .material-symbols-outlined { font-size: 16px; }
 
+/* Tela de toque: 44px de área por controle (guia da Apple/Google; o
+   mínimo do WCAG é 24px, mas Editar e Excluir lado a lado, com 28px cada,
+   pediam mira demais pro polegar). Por `pointer: coarse` e não por largura:
+   o que importa é ser dedo, não o tamanho da tela — no mouse continua o
+   desenho compacto. Onde aumentar o desenho empurraria o layout, só a ÁREA
+   cresce, por um ::after invisível. */
+@media (pointer: coarse) {
+  .icon-btn, .avatar-btn { width: 44px; height: 44px; }
+  .mini-btn.icon-btn { position: relative; width: 36px; height: 36px; }
+  /* 36 + 4 de cada lado = 44. Com 8px entre Editar e Excluir (6px no
+     mouse), as duas áreas se encostam sem se sobrepor — toque no meio não
+     cai no botão errado. */
+  .mini-btn.icon-btn::after { content: ''; position: absolute; inset: -4px; }
+  .account-side-row, .account-icon-col, .goal-actions { gap: 8px; }
+  .mini-btn, .primary-btn, .secondary-btn, .dash-mini-chip-link,
+  .profile-header-actions .primary-btn, .tabs button, .segmented button,
+  .field select { min-height: 44px; }
+  /* Olho/+ nos cards do Dashboard: o desenho continua o ícone de 16px no
+     meio do rótulo, só a área invisível cresce até 44px. O espaço entre "+"
+     e olho sobe de 16 pra 28px pra as duas áreas não se sobreporem. */
+  .eye-btn { position: relative; }
+  .eye-btn::after { content: ''; position: absolute; inset: -8px; }
+  .label-btn-group { gap: 28px; }
+}
+
 .badge {
   font-size: 11px;
   font-weight: 700;
@@ -1514,7 +1657,6 @@ section.view.active { display: block; animation: view-fade-in 0.25s ease; }
   padding: 14px 16px;
   border-radius: var(--radius-md);
   background: linear-gradient(135deg, var(--purple-soft) 0%, transparent 100%);
-  border: 1px solid var(--border);
 }
 .next-month-total-row span { font-size: 13px; font-weight: 600; color: var(--text-secondary); }
 .next-month-total-row strong { font-family: var(--font-display); font-size: 20px; font-weight: 800; color: var(--purple-text); }
@@ -1700,6 +1842,14 @@ section.view.active { display: block; animation: view-fade-in 0.25s ease; }
 
 /* Texto de apoio abaixo de um campo (ex.: a previsão "2x de R$ 50,00"). */
 .field-hint { font-size: 12px; color: var(--purple-text); margin-top: 6px; line-height: 1.4; }
+/* Erro de validação embaixo do campo (ex.: nome de categoria repetido). Vazio
+   não ocupa espaço; o campo inválido ganha a borda na mesma cor. */
+.field-error { font-size: 12.5px; color: var(--danger); margin: 0; line-height: 1.4; }
+.field-error:empty { display: none; }
+.field input[aria-invalid="true"] { border-color: var(--danger); }
+/* Pop-up de uma linha só: no desktop não precisa da largura dos formulários
+   grandes. No celular segue a folha de baixo, largura toda, como os outros. */
+@media (min-width: 640px) { .category-sheet { max-width: 400px; } }
 /* Mês de destino diferente do mês de referência atual: âmbar em vez de roxo.
    Não é erro (pode ser proposital), é só o caso que surpreende — foi assim
    que uma despesa com a data digitada errada foi parar num mês futuro sem
@@ -2337,7 +2487,10 @@ form > .field-hint:empty { margin: 0; }
 .sc-flow-wrap { display: flex; flex-direction: column; gap: 14px; }
 .sc-flow-bar { display: flex; height: 22px; border-radius: 999px; overflow: hidden; background: var(--surface-soft); }
 .sc-flow-seg { height: 100%; transition: width 0.4s ease; }
-.sc-flow-seg + .sc-flow-seg { border-left: 2px solid var(--surface); }
+/* Divisor de 2px entre segmentos, na cor do fundo. Sombra interna em vez de
+   border-left: mesmo desenho, sem somar 2px à largura do segmento (a
+   proporção da barra fica exata) e sem parecer "aba lateral" pro detector. */
+.sc-flow-seg + .sc-flow-seg { box-shadow: inset 2px 0 0 var(--surface); }
 /* Linhas do próprio stackedBar (ver SimpleCharts.stackedBar) mais respiradas
    que o padrão de .sc-legend-item (6px) — aqui são só 2-3 linhas por card,
    então cabe um espaçamento maior sem apertar o card. Escopado a
@@ -2532,14 +2685,20 @@ form > .field-hint:empty { margin: 0; }
 [data-theme="dark"] .sc-heatmap-cell[data-level="3"] { background: rgba(182, 158, 242, 0.58); }
 [data-theme="dark"] .sc-heatmap-cell[data-level="4"] { background: var(--purple-300); }
 
-/* Número do dia dentro da célula — escuro nas células claras/vazias, claro
-   nas células mais intensas (níveis 3-4) pra manter contraste; no tema
-   escuro os níveis 3-4 usam um roxo-lavanda claro (ver acima), então o
-   número precisa inverter de novo pra um tom escuro. */
+/* Número do dia dentro da célula. Cada nível de cor pede um tom próprio pra
+   passar de 4,5:1 com letra de 9,5px (conta feita sobre o card sólido):
+   - vazio: --text-muted (5,6:1 claro / 5,0:1 escuro)
+   - níveis 1-3: --text-primary (6,3 a 12,7:1 claro / 9,0 e 6,0:1 escuro)
+   - nível 4: branco no claro (5,3:1) e roxo escuro no escuro (6,5:1)
+   - nível 3 no escuro: branco (5,2:1) — o roxo escuro dava 2,9:1 ali.
+   Antes os níveis 1-2 ficavam no muted (até 3,2:1) e o 3 claro no branco
+   (2,6:1): o dia sumia justo nos dias de mais gasto. */
 .sc-heatmap-cell-day { font-size: 9.5px; font-weight: 700; color: var(--text-muted); font-variant-numeric: tabular-nums; pointer-events: none; }
-.sc-heatmap-cell[data-level="3"] .sc-heatmap-cell-day,
+.sc-heatmap-cell[data-level="1"] .sc-heatmap-cell-day,
+.sc-heatmap-cell[data-level="2"] .sc-heatmap-cell-day,
+.sc-heatmap-cell[data-level="3"] .sc-heatmap-cell-day { color: var(--text-primary); }
 .sc-heatmap-cell[data-level="4"] .sc-heatmap-cell-day { color: #fff; }
-[data-theme="dark"] .sc-heatmap-cell[data-level="3"] .sc-heatmap-cell-day,
+[data-theme="dark"] .sc-heatmap-cell[data-level="3"] .sc-heatmap-cell-day { color: #fff; }
 [data-theme="dark"] .sc-heatmap-cell[data-level="4"] .sc-heatmap-cell-day { color: var(--purple-900); }
 
 /* Dia de hoje: anel de destaque que funciona sobre qualquer nível de cor. */
@@ -2662,6 +2821,9 @@ form > .field-hint:empty { margin: 0; }
 .report-toolbar h3 { font-family: var(--font-display); font-size: 16px; }
 .report-toolbar-actions { display: flex; align-items: center; gap: 8px; }
 .report-toolbar-actions .secondary-btn { padding: 9px 14px; font-size: 13px; }
+.report-pdf-btn { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.report-pdf-btn .material-symbols-outlined { font-size: 18px; }
+.report-pdf-btn:disabled { opacity: 0.7; cursor: progress; }
 
 /* display:flex aqui (só pra centralizar .report-sheet) é o que causava o
    bug: um item flex dentro de um container flex com overflow:auto tem seu
@@ -2671,7 +2833,24 @@ form > .field-hint:empty { margin: 0; }
    texto que passava disso ainda aparecia (overflow:visible no item), só
    que sem o fundo claro por trás, caindo por cima do fundo escuro do
    modal. Centralizar com margin:auto num bloco comum não tem esse problema. */
-.report-scroll { flex: 1; overflow-y: auto; padding: 24px; }
+.report-scroll { flex: 1; overflow-y: auto; padding: 24px; container: report / inline-size; }
+
+/* Celular: tela cheia em vez do "bottom sheet" de 92vh dos outros modais —
+   a folha já é apertada, e no app instalado a barra de status
+   (black-translucent) fica POR CIMA da página, então a barra de ferramentas
+   precisa descer o tamanho dela (safe-area-inset-top). */
+@media (max-width: 639px) {
+  .report-modal-sheet {
+    width: 100%;
+    max-width: none;
+    height: 100vh;
+    height: 100dvh;
+    max-height: none;
+    border-radius: 0;
+  }
+  .report-toolbar { padding: calc(12px + env(safe-area-inset-top, 0px)) 16px 12px; }
+  .report-scroll { padding: 12px 12px calc(16px + env(safe-area-inset-bottom, 0px)); }
+}
 
 /* Cores fixas (não variáveis de tema) — o relatório é um documento pra
    imprimir/exportar, então NUNCA deve mudar com o tema escuro/claro do
@@ -2702,7 +2881,7 @@ form > .field-hint:empty { margin: 0; }
   border-bottom: 2px solid #5F3DC4;
 }
 .report-brand-title { font-family: var(--font-display); font-weight: 700; font-size: 22px; color: #4B2E9E; }
-.report-brand-sub { font-size: 12.5px; color: #6B6480; margin-top: 2px; }
+.report-brand-sub { font-size: 12.5px; color: #58526D; margin-top: 2px; }
 .report-brand-logo { display: flex; align-items: center; gap: 8px; color: #5F3DC4; font-family: var(--font-display); font-weight: 700; font-size: 14px; }
 
 .report-section { margin-bottom: 26px; break-inside: avoid; }
@@ -2720,16 +2899,28 @@ form > .field-hint:empty { margin: 0; }
 
 .report-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
 .report-card { background: #ECE6F8; border-radius: 10px; padding: 10px 12px; }
-.report-card-label { font-size: 10.5px; color: #6B6480; }
+.report-card-label { font-size: 10.5px; color: #58526D; }
 .report-card-value { font-family: var(--font-display); font-weight: 700; font-size: 16px; margin-top: 2px; color: #201A33; }
+/* Número fora do esperado (saldo negativo, limite de renda passado): mesmos
+   tons de --danger/--warning do tema claro — a folha é sempre clara. */
+.report-card-value.is-danger { color: #B9362A; }
+.report-card-value.is-warning { color: #966319; }
+.report-card-note { font-size: 10.5px; color: #6A627E; margin-top: 2px; }
+.report-summary-msg { font-size: 12.5px; line-height: 1.5; color: #201A33; margin: 12px 0 0; }
 
 .report-chart-block { background: #ECE6F8; border-radius: 10px; padding: 12px; }
+/* O brilho de [data-theme="dark"] .sc-line-svg pega pelo tema do <html>, não
+   pelo data-theme="light" da folha — sem isso vazava um halo roxo pra cá. */
+.report-sheet .sc-line-svg { filter: none; }
 
+/* Tabela mais larga que a folha (5 colunas num celular) rola de lado aqui
+   dentro, em vez de empurrar a folha inteira pra fora da tela. */
+.report-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .report-table { width: 100%; border-collapse: collapse; font-size: 12px; color: #201A33; }
 .report-table th, .report-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #D5C8EA; }
-.report-table th { color: #6B6480; font-weight: 600; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.02em; }
-.report-table td.num, .report-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
-/* Linha de total (tfoot) — usada pelo extrato "Compras do mês" (seção 05):
+.report-table th { color: #58526D; font-weight: 600; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.02em; }
+.report-table td.num, .report-table th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* Linha de total (tfoot) — usada pelo extrato "Compras do mês":
    fundo e borda mais fortes pra ela não se confundir com uma cobrança a mais
    da lista logo acima. */
 .report-table tfoot td {
@@ -2739,50 +2930,94 @@ form > .field-hint:empty { margin: 0; }
   font-size: 12.5px;
 }
 
-.report-empty { font-size: 12.5px; color: #78708C; padding: 6px 0; }
+.report-empty { font-size: 12.5px; color: #6A627E; padding: 6px 0; }
 
-/* Insights (08): grade 2x2, uma cor de borda por quadrante — mesmo
-   agrupamento "Melhorou / Piorou / Atenção / Oportunidades" da referência. */
+/* Insights: grade 2x2 no agrupamento "Melhorou / Piorou / Atenção /
+   Oportunidades" da referência. A cor de cada categoria fica só no título
+   (ícone + nome) — a antiga borda lateral colorida repetia a mesma
+   informação. Quadrante vazio perde o fundo: o olho vai direto aos que têm
+   algo a dizer. */
 .report-insights-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.report-insight-box { background: #ECE6F8; border-left: 3px solid; border-radius: 8px; padding: 10px 12px; }
+.report-insight-box { background: #ECE6F8; border: 1px solid transparent; border-radius: 8px; padding: 10px 12px; }
+.report-insight-box.is-empty { background: transparent; border-color: #D5C8EA; }
 .report-insight-title { font-weight: 700; font-size: 12px; margin-bottom: 6px; display: flex; align-items: center; gap: 4px; }
 .report-insight-title .material-symbols-outlined { font-size: 15px; }
 .report-insight-box ul { margin: 0; padding-left: 16px; font-size: 11.5px; color: #201A33; line-height: 1.5; }
 .report-insight-box li { margin-bottom: 3px; }
-.report-insight-empty { font-size: 11px; color: #78708C; margin: 0; }
-@media (max-width: 640px) {
-  .report-insights-grid { grid-template-columns: 1fr; }
-}
+.report-insight-empty { font-size: 11px; color: #6A627E; margin: 0; }
 
-.report-footer { margin-top: 8px; padding-top: 12px; border-top: 1px solid #D5C8EA; font-size: 10.5px; color: #78708C; text-align: center; }
+.report-footer { margin-top: 8px; padding-top: 12px; border-top: 1px solid #D5C8EA; font-size: 10.5px; color: #6A627E; text-align: center; }
 
-@media (max-width: 640px) {
+/* Container query, não media query: o que importa é a largura da FOLHA, não
+   da tela. O PDF é desenhado numa cópia de 760px (.report-pdf-host) mesmo
+   num celular — com media query ele sairia no layout apertado do celular. */
+@container report (max-width: 600px) {
+  .report-sheet { padding: 20px 16px; }
+  .report-brand { flex-wrap: wrap; }
+  .report-brand-title { font-size: 18px; }
   .report-cards { grid-template-columns: repeat(2, 1fr); }
-  .report-sheet { padding: 24px 18px; }
+  .report-insights-grid { grid-template-columns: 1fr; }
+  /* "Tipo" é a coluna que dá pra perder no celular: "Parcela" já mostra 8/10
+     quando é parcelada. Sem ela, Valor (a que importa) cabe sem rolar. */
+  .report-col-tipo { display: none; }
+  .report-table th, .report-table td { padding: 6px 5px; }
 }
 
-/* Impressão: isola só a folha do relatório na página, sem a barra de
-   ferramentas nem o resto do app por trás — o mesmo truque de "imprimir só
-   este elemento" (visibility em vez de display, pra não precisar prever a
-   profundidade do DOM). */
+/* Cópia fora da tela que vira o PDF (ver Report._generatePdf). Largura fixa
+   = REPORT_PDF_WIDTH_PX em report.js. Sem animação nem transição: a "foto"
+   tem que pegar o estado final, não um quadro no meio do caminho. */
+.report-pdf-host {
+  position: absolute;
+  left: -10000px;
+  top: 0;
+  width: 760px;
+  container: report / inline-size;
+  pointer-events: none;
+}
+.report-pdf-host *, .report-pdf-host *::before, .report-pdf-host *::after {
+  animation: none !important;
+  transition: none !important;
+}
+.report-sheet--pdf {
+  max-width: none;
+  padding: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: #FFFFFF;
+}
+.report-sheet--pdf .report-table-wrap { overflow: visible; }
+
+/* Impressão: só reserva no computador quando o gerador de PDF não carrega
+   (ver Report.exportPdf). Antes isolava a folha com visibility:hidden no
+   resto — mas aí o app inteiro continuava ocupando espaço, o relatório
+   (position:absolute) ficava preso à 1ª página e o fundo escuro do tema
+   saía impresso: no celular o resultado era uma página preta e vazia.
+   display:none tira o app do fluxo de verdade. */
 @media print {
-  body * { visibility: hidden; }
-  #report-overlay, #report-overlay * { visibility: visible; }
-  #report-overlay {
-    position: absolute;
-    inset: 0;
-    background: none;
-    display: block;
-  }
+  @page { size: A4; margin: 12mm; }
+  html, body { background: #FFFFFF !important; padding: 0 !important; margin: 0 !important; }
+  body > *:not(#report-overlay) { display: none !important; }
+  #report-overlay { position: static; display: block; background: none; }
   #report-overlay .report-toolbar { display: none; }
   #report-overlay .report-modal-sheet {
     position: static;
     width: 100%;
+    max-width: none;
     height: auto;
-    max-width: 100%;
+    max-height: none;
+    overflow: visible;
+    background: none;
     box-shadow: none;
     border-radius: 0;
   }
-  #report-overlay .report-scroll { overflow: visible; height: auto; padding: 0; display: block; }
-  #report-overlay .report-sheet { max-width: 100%; box-shadow: none; border-radius: 0; }
+  #report-overlay .report-scroll { overflow: visible; height: auto; padding: 0; }
+  #report-overlay .report-sheet { max-width: none; padding: 0; box-shadow: none; border-radius: 0; }
+  #report-overlay .report-table-wrap { overflow: visible; }
+  #report-overlay .report-table tr { break-inside: avoid; }
+  /* O Chrome repete <tfoot> no pé de toda página impressa — o "Total" do
+     extrato aparecia duas vezes. Só no fim da tabela, como na tela. */
+  #report-overlay .report-table tfoot { display: table-row-group; }
+  /* Sem isso o navegador descarta os fundos (cards lilás, total da tabela,
+     quadros de insights) — e no Chrome do Android nem dá pra religar. */
+  #report-overlay, #report-overlay * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }

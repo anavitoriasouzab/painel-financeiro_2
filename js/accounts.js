@@ -402,23 +402,25 @@ const Accounts = {
     optNew.value = '__nova__';
     optNew.textContent = '+ Nova categoria...';
     select.appendChild(optNew);
+    select.dataset.anterior = select.value;
   },
 
-  handleCategoriaChange() {
+  async handleCategoriaChange() {
     const select = document.getElementById('expense-categoria');
-    if (select.value === '__nova__') {
-      const nome = prompt('Nome da nova categoria:');
-      if (nome && nome.trim()) {
-        appData.categorias.push(nome.trim());
-        Storage.save(appData);
-        this._populateCategoriaSelect(nome.trim());
-      } else {
-        const ctx = this.editingContext;
-        const arr = ctx && ctx.id ? (ctx.tipo === 'recorrente' ? appData.despesasRecorrentes : appData.despesasVariaveis) : null;
-        const item = arr ? arr.find((d) => d.id === ctx.id) : null;
-        select.value = item ? item.categoria : appData.categorias[0];
-      }
+    if (select.value !== '__nova__') {
+      // Guarda a última escolha de verdade, pra onde o cancelar volta.
+      select.dataset.anterior = select.value;
+      return;
     }
+    const nome = await openNewCategoryDialog();
+    if (nome) {
+      this._populateCategoriaSelect(nome);
+      return;
+    }
+    // Cancelou: volta pra categoria que estava escolhida ANTES de abrir o
+    // pop-up (não pra primeira da lista), e nunca deixa "+ Nova
+    // categoria..." selecionado — seria gravado como nome de categoria.
+    select.value = select.dataset.anterior || appData.categorias[0];
   },
 
   handleComprovanteChange(input) {
@@ -740,6 +742,84 @@ Se forem compras diferentes, mude o nome de uma delas.`);
  * ação, `false` se foi cancelada. `danger: true` deixa o botão de confirmar
  * vermelho, pra sinalizar visualmente uma ação que não pode ser desfeita.
  */
+/**
+ * Pop-up de nova categoria (#category-modal) — no lugar do prompt() nativo,
+ * que saía como caixa cinza do sistema, fora do visual do app. Resolve com
+ * o nome criado (já gravado em appData.categorias e salvo) ou null se a
+ * pessoa cancelou/fechou.
+ *
+ * Duplicata é barrada AQUI, sem diferenciar maiúsculas de minúsculas:
+ * `categorias` tem chave (user_id, nome), então "Mercado" duas vezes fazia
+ * o save inteiro falhar na gravação — e "mercado" ao lado de "Mercado"
+ * dividiria o mesmo gasto em duas fatias nos gráficos.
+ */
+const CATEGORIA_NOME_MAX = 40;
+
+function openNewCategoryDialog() {
+  return new Promise((resolve) => {
+    const modal = document.getElementById('category-modal');
+    const form = document.getElementById('category-form');
+    const input = document.getElementById('category-nome');
+    const erro = document.getElementById('category-nome-erro');
+    const closeBtn = document.getElementById('category-close-btn');
+    const cancelBtn = document.getElementById('category-cancel-btn');
+
+    const mostrarErro = (msg) => {
+      erro.textContent = msg;
+      input.setAttribute('aria-invalid', msg ? 'true' : 'false');
+    };
+    input.value = '';
+    mostrarErro('');
+
+    function finish(result) {
+      modal.classList.remove('active');
+      form.removeEventListener('submit', onSubmit);
+      input.removeEventListener('input', onInput);
+      closeBtn.removeEventListener('click', onCancel);
+      cancelBtn.removeEventListener('click', onCancel);
+      resolve(result);
+    }
+    function onInput() { if (erro.textContent) mostrarErro(''); }
+    function onCancel() { finish(null); }
+    function onSubmit(e) {
+      e.preventDefault();
+      // Espaços repetidos/nas pontas viram um só — "  Pet  shop " é "Pet shop".
+      const nome = input.value.replace(/\s+/g, ' ').trim();
+      if (!nome) {
+        mostrarErro('Digite um nome para a categoria.');
+        input.focus();
+        return;
+      }
+      if (nome.length > CATEGORIA_NOME_MAX) {
+        mostrarErro(`Use até ${CATEGORIA_NOME_MAX} caracteres.`);
+        input.focus();
+        return;
+      }
+      const chave = (s) => s.toLocaleLowerCase('pt-BR');
+      const existente = appData.categorias.find((c) => chave(c) === chave(nome));
+      if (existente) {
+        mostrarErro(`Você já tem a categoria “${existente}”. Escolha ela na lista ou use outro nome.`);
+        input.focus();
+        return;
+      }
+      appData.categorias.push(nome);
+      Storage.save(appData);
+      toast(`Categoria “${nome}” criada.`);
+      finish(nome);
+    }
+
+    form.addEventListener('submit', onSubmit);
+    input.addEventListener('input', onInput);
+    closeBtn.addEventListener('click', onCancel);
+    cancelBtn.addEventListener('click', onCancel);
+    modal.classList.add('active');
+    // setupModalAccessibility (app.js) foca o 1º elemento focável ao abrir —
+    // aqui seria o X do cabeçalho. O campo é o que a pessoa quer: foco nele
+    // depois do observer.
+    setTimeout(() => input.focus(), 0);
+  });
+}
+
 /**
  * Fila de confirmDialog — todos usam o mesmo #confirm-modal do DOM. Sem
  * isso, um duplo clique/duplo toque num botão de salvar (formulário de

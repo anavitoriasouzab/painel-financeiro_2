@@ -30,6 +30,13 @@ const SimpleCharts = {
   _uid: 0,
 
   isDark() { return document.documentElement.getAttribute('data-theme') === 'dark'; },
+  /** Tema do lugar onde o gráfico está desenhado — o data-theme mais próximo,
+      não o do <html>. Diferente de isDark() quando o gráfico mora numa área
+      que força um tema (ex.: a folha do relatório, sempre clara). */
+  _isDarkAt(el) {
+    const scope = el && el.closest('[data-theme]');
+    return scope ? scope.getAttribute('data-theme') === 'dark' : false;
+  },
   palette() { return this.isDark() ? this.paletteDark : this.paletteLight; },
   colorFor(i) { const p = this.palette(); return p[i % p.length]; },
 
@@ -640,10 +647,12 @@ const SimpleCharts = {
           const pts = allPts[si];
           const i = pts.length - 1;
           const [x, y] = pts[i];
-          // Cor da série "clareada" pro texto — algumas cores de linha (ex.: roxo
-          // bem escuro) têm contraste ótimo como traço, mas ficam ilegíveis como
-          // texto pequeno sobre o fundo escuro do card.
-          const color = this._shade(s.color || this.colorFor(si), 0.4);
+          // Tom da série ajustado pro texto: clareado sobre fundo escuro (roxo
+          // bem escuro é ótimo como traço, mas some como texto de 10px no card
+          // escuro) e ESCURECIDO sobre fundo claro — clarear ali derrubava o
+          // "7,2k"/"4,1k" pra 2,6-3,3:1. O fundo é o do gráfico, não o do app:
+          // a folha do relatório é clara mesmo com o app no tema escuro.
+          const color = this._shade(s.color || this.colorFor(si), this._isDarkAt(container) ? 0.4 : -0.25);
           const { pos, tx } = hAnchor((x / w) * 100);
           return `<span class="sc-line-point-label" style="${pos}top:${((y / h) * 100).toFixed(1)}%;transform:translate(${tx}, calc(-100% - 8px));color:${color}">${escapeHtml(fmt(s.data[i]))}</span>`;
         }).join('');

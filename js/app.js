@@ -279,17 +279,14 @@ function setupExpenseModal() {
     Accounts.openForm('variavel', null);
   });
 
-  const voiceBtn = document.getElementById('voice-expense-btn');
-  if (voiceBtn) {
-    if (!VoiceExpense.isSupported()) {
-      // Sem suporte (Firefox, Safari) — some com o botão em vez de deixar
-      // ali pra clicar e só receber um alerta de "não funciona".
-      voiceBtn.style.display = 'none';
-    } else {
-      voiceBtn.addEventListener('click', () => VoiceExpense.toggle());
-    }
-  }
-  const voiceCancelBtn = document.getElementById('voice-listening-cancel-btn');
+  // Todo botão de voz ([data-voice-trigger]: barra do Dashboard, ícone do
+  // cabeçalho, botão de Contas). Sem suporte no navegador, somem todos em
+  // vez de ficarem ali pra tocar e só receber "não funciona".
+  document.querySelectorAll('[data-voice-trigger]').forEach((btn) => {
+    if (!VoiceExpense.isSupported()) btn.hidden = true;
+    else btn.addEventListener('click', () => VoiceExpense.toggle());
+  });
+  const voiceCancelBtn = document.getElementById('voice-listening-close-btn');
   if (voiceCancelBtn) voiceCancelBtn.addEventListener('click', () => VoiceExpense.cancel());
 
   document.getElementById('expense-close-btn').addEventListener('click', () => Accounts.closeForm());
@@ -317,6 +314,8 @@ function setupExpenseModal() {
 function setupReportModal() {
   const closeBtn = document.getElementById('report-close-btn');
   if (closeBtn) closeBtn.addEventListener('click', () => Report.close());
+  const pdfBtn = document.getElementById('report-pdf-btn');
+  if (pdfBtn) pdfBtn.addEventListener('click', () => Report.exportPdf());
 }
 
 function setupInstallmentModal() {

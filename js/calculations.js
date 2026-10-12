@@ -720,21 +720,14 @@ const Calc = {
    */
   calculateTopExpenses(data, mesReferencia, limit = 8) {
     const itens = [];
-    // `mes` vai junto em cada item pra dar pra conferir de onde veio esse
-    // valor (ver "Mês" na tabela de Maiores despesas do relatório) — nas
-    // variáveis é o mesReferencia real do lançamento (se algum dia houver
-    // um bug de atribuição de mês, aparece aqui na hora); recorrentes e
-    // parcelamentos não têm um "mês da compra" próprio (são cobranças que
-    // se repetem), então mostram o mês do próprio relatório, que é quando
-    // essa cobrança está de fato acontecendo.
     data.despesasRecorrentes
       .filter((d) => this.isDespesaRecorrenteAtiva(d, mesReferencia))
-      .forEach((d) => itens.push({ nome: d.nome, valor: d.valor, categoria: d.categoria, mes: mesReferencia }));
+      .forEach((d) => itens.push({ nome: d.nome, valor: d.valor, categoria: d.categoria }));
     data.despesasVariaveis
       .filter((d) => d.mesReferencia === mesReferencia)
-      .forEach((d) => itens.push({ nome: d.nome, valor: d.valor, categoria: d.categoria, mes: d.mesReferencia }));
+      .forEach((d) => itens.push({ nome: d.nome, valor: d.valor, categoria: d.categoria }));
     this.activeInstallmentsForMonth(data, mesReferencia)
-      .forEach((p) => itens.push({ nome: p.nome, valor: p.valorParcela, categoria: p.categoria, mes: mesReferencia }));
+      .forEach((p) => itens.push({ nome: p.nome, valor: p.valorParcela, categoria: p.categoria }));
     return itens.sort((a, b) => b.valor - a.valor).slice(0, limit);
   },
 

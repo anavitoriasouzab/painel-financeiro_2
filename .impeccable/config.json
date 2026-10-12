@@ -1,0 +1,32 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "dark-glow",
+        "value": "*",
+        "files": [
+          "index.html"
+        ],
+        "createdAt": "2026-10-12T17:14:11.332Z",
+        "reason": "user confirmed 12/10/2026: sombra do botão + da bottom-nav (css/style.css .nav-item.add-btn) é elevação deslocada 10px, intencional, não halo"
+      },
+      {
+        "rule": "broken-image",
+        "value": "*",
+        "files": [
+          "index.html"
+        ],
+        "createdAt": "2026-10-12T17:44:30.948Z",
+        "reason": "Claude verificou 07/10 e 12/10/2026: as 5 <img> sem src (avatares, foto de perfil, comprovante) ficam display:none até o JS preencher o src via Storage.imageSrc"
+      },
+      {
+        "rule": "overused-font",
+        "value": "inter",
+        "createdAt": "2026-10-12T17:55:42.203Z",
+        "reason": "user confirmed 12/10/2026: Inter fica como fonte do corpo depois de comparar com Manrope, IBM Plex Sans e Instrument Sans no app; a identidade fica na Sora (títulos e valores)"
+      }
+    ]
+  }
+}

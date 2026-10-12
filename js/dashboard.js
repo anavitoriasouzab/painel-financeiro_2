@@ -319,7 +319,13 @@ const Dashboard = {
     const card = document.getElementById('stat-reserva-card');
     if (!card) return;
     const reserva = data.reservaEmergencia;
-    if (!reserva || !reserva.possui || reserva.valorAtual == null) {
+    const semReserva = !reserva || !reserva.possui || reserva.valorAtual == null;
+    // Sem esse card a grade fica com 3 cards num espaço de 4 (2×2 no
+    // celular, 4 colunas no desktop) e sobra um buraco — o CSS reorganiza
+    // por essa classe (ver .stat-grid--sem-reserva).
+    const grid = card.closest('.stat-grid');
+    if (grid) grid.classList.toggle('stat-grid--sem-reserva', semReserva);
+    if (semReserva) {
       card.style.display = 'none';
       return;
     }

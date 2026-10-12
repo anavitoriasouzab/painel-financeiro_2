@@ -265,6 +265,15 @@ body.auth-body {
   text-decoration: underline;
 }
 
+/* Tela de toque: 44px de área (mesmo critério de css/style.css). O olho da
+   senha fica DENTRO do campo, então cresce só até a altura dele; o
+   "Criar conta" no meio da frase é link de texto corrido, que o WCAG
+   isenta — só o "Esqueci minha senha", sozinho na linha, ganha altura. */
+@media (pointer: coarse) {
+  .auth-eye-btn { padding: 10px; }
+  #auth-forgot-link { padding-block: 14px; margin-block: -14px; }
+}
+
 .auth-submit {
   width: 100%;
   display: flex;
